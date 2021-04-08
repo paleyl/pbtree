@@ -1,0 +1,6 @@
+#INCLUDE(FindProtobuf)
+FIND_PACKAGE(Protobuf EXACT REQUIRED PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/protobuf/cmake/build/lib64/cmake/protobuf)
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/protobuf/src")
+#MESSAGE(STATUS, "PROTOBUF_INCLUDE_DIR is ${CMAKE_CURRENT_SOURCE_DIR}")
+ADD_LIBRARY(tree_proto ${PROTO_HEADER} ${PROTO_SRC})
+protobuf_generate(LANGUAGE cpp TARGET tree_proto PROTOS Tree.proto)

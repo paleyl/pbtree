@@ -1,0 +1,7 @@
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_C_COMPILER g++)
+set(CMAKE_CXX_COMPILER g++)
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/boost_1_75_0")
+# list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/boost_1_75_0/")
+add_library(distribution distribution.cxx)

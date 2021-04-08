@@ -1,0 +1,15 @@
+syntax = "proto2";
+package pbtree;
+
+message PBTree {
+  message Node {
+    required int32 level = 1;
+    optional Node leftchild = 2;
+    optional Node rightchild = 3;
+    optional double mu = 4;
+    optional double sigma = 5;
+    optional int64 split_feature_index = 6;
+    optional double split_feature_value = 7;
+  }
+  repeated Node tree = 1;
+}

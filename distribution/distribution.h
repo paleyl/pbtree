@@ -11,11 +11,12 @@
 #include "boost/numeric/ublas/matrix_sparse.hpp"
 #include "boost/numeric/ublas/io.hpp"
 
+#include "glog/logging.h"
+
 namespace pbtree {
 class Distribution {
   virtual double caculate_loss(
-      const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
-      const std::vector<double>& train_data,
+      const std::vector<double>& label_data,
       const uint64_t& col_index,
       const std::vector<uint64_t>& row_index_vec,
       const double& split_point) = 0;
@@ -24,7 +25,6 @@ class Distribution {
 
 class NormalDistribution : public Distribution {
   double caculate_loss(
-      const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
       const std::vector<double>& train_data,
       const uint64_t& col_index,
       const std::vector<uint64_t>& row_index_vec);

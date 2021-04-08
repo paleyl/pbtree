@@ -1,9 +1,9 @@
-#include "distribution.h"
 #include "math.h"
+#include "distribution.h"
 
 namespace pbtree{
 
-double NormalDistribution::caculate_loss(
+double NormalDistribution::calculate_loss(
     const std::vector<double>& label_data,
     const uint64_t& col_index,
     const std::vector<uint64_t>& row_index_vec) {

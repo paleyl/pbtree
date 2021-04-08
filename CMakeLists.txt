@@ -26,6 +26,8 @@ add_subdirectory(utility)
 list(APPEND EXTRA_LIBS utility)
 add_subdirectory(distribution)
 list(APPEND EXTRA_LIBS distribution)
+add_subdirectory(tree)
+list(APPEND EXTRA_LIBS tree)
 
 add_executable(Trial trial.cxx)
 
@@ -35,6 +37,8 @@ target_link_libraries(Trial PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/proto
 
 target_include_directories(Trial PUBLIC
                            "${PROJECT_BINARY_DIR}"
+                           "${PROJECT_SOURCE_DIR}/proto/build"
+                           ${CMAKE_CURRENT_SOURCE_DIR}
                            ${EXTRA_INCLUDES}
                            ${PROTOBUF_LIBRARY}
                            )

@@ -15,19 +15,28 @@
 
 namespace pbtree {
 class Distribution {
-  virtual double caculate_loss(
+ public:
+  Distribution() {};
+  virtual ~Distribution() {};
+  virtual double calculate_loss(
       const std::vector<double>& label_data,
       const uint64_t& col_index,
       const std::vector<uint64_t>& row_index_vec,
-      const double& split_point) = 0;
-  virtual double mean() = 0;
+      const double& split_point) {
+        return 0;
+  };
+  // virtual double mean() = 0;
 };
 
 class NormalDistribution : public Distribution {
-  double caculate_loss(
+ public:
+  double calculate_loss(
       const std::vector<double>& train_data,
       const uint64_t& col_index,
       const std::vector<uint64_t>& row_index_vec);
+  void print_version() {
+    VLOG(202) << "Normal distribution";
+  }
 };
 }  // namespace pbtree
 #endif  // LOSS_LOSS_H_

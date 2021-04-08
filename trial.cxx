@@ -15,13 +15,15 @@
 #include "boost/numeric/ublas/matrix_sparse.hpp"
 #include "boost/numeric/ublas/io.hpp"
 
-#include "utility/utility.h"
+#include "distribution/distribution.h"
 #include "proto/build/Tree.pb.h"
+#include "tree/tree.h"
+#include "utility/utility.h"
 
 DEFINE_string(test, "xxx", "");
 DEFINE_int32(input_data_line_width, 4096, "");
 DEFINE_string(input_train_data_path, "", "");
-DEFINE_int32(histogram_bin_count, 100, "number of bins in histogram");
+
 DEFINE_double(default_value, 0.0, "");
 
 typedef std::pair<uint64_t, double> feature_t;
@@ -111,89 +113,7 @@ int blas_trial () {
   return 0;
 }
 
-bool forest_predict(const pbtree::PBTree& pbtree,
-    const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
-    std::vector<double>* result) {
-  // for () {}
-  // for () {
-
-  // }
-  return true;
-}
-
-bool find_split(
-    const label_data_t& train_data,
-    const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
-    const std::vector<uint64_t>& row_index_vec, const uint64_t& col_index,
-    std::shared_ptr<std::vector<std::vector<
-    std::pair<double, float>>>> histogram_vec_ptr) {
-  const std::vector<std::pair<double, float>>& histogram = (*histogram_vec_ptr)[col_index];
-  for (auto iter = histogram.begin(); iter != histogram.end(); ++iter) {
-    // double point = iter->first;
-    
-  }
-  return true;
-}
-
-bool build_histogram(
-    const label_data_t& train_data,
-    const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
-    const uint64_t feature_index,
-    std::vector<std::pair<double, float>>* histogram
-    ) {
-  using namespace boost::numeric::ublas;
-  matrix_column<mapped_matrix<double>> col = column(*matrix_ptr, feature_index);
-  std::vector<double> vec;
-  for (unsigned i = 0; i < col.size(); ++i) {
-    vec.push_back(col[i]);
-  }
-  std::sort(vec.begin(), vec.end());
-  std::vector<std::pair<double, float>> mid_histogram;
-  for (int i = 0; i < FLAGS_histogram_bin_count; ++i) {
-    int index = vec.size() * (i + 1) / FLAGS_histogram_bin_count - 1;  // zero based
-    index = index < 0 ? 0 : index; 
-    double value = vec[index];
-    float portion = (index + 1) * 1.0 / vec.size();
-    mid_histogram.push_back(std::make_pair(value, portion));
-  }
-  for (auto iter = mid_histogram.begin(); iter < mid_histogram.end() - 1; ++iter) {
-    auto next_iter = iter + 1;
-    if (!pbtree::Utility::check_double_equal(iter->first, next_iter->first)) {
-      histogram->push_back(*iter);
-    }
-  }
-  histogram->push_back(mid_histogram.back());
-  return true;
-}
-
-bool build_tree(
-    const label_data_t& train_data,
-    const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
-    pbtree::PBTree* pbtree) {
-  pbtree::PBTree_Node* root_node = pbtree->add_tree();
-  root_node->set_level(0);
-  root_node->set_mu(0);
-  root_node->set_sigma(0);
-  std::vector<double> gain_vec;
-  // build histogram
-  std::vector
-      <std::vector<std::pair<double, float>>> histogram_vec;
-  std::shared_ptr<std::vector
-      <std::vector<std::pair<double, float>>>> histogram_vec_ptr = 
-      std::make_shared<std::vector
-      <std::vector<std::pair<double, float>>>>(histogram_vec);
-  for (unsigned long j = 0; j < matrix_ptr->size2(); ++j) {
-    std::vector<std::pair<double, float>> tmp_histogram;
-    build_histogram(train_data, matrix_ptr, j, &tmp_histogram);
-    histogram_vec_ptr->push_back(tmp_histogram);
-  }
-  for (auto iter1 = histogram_vec_ptr->begin(); iter1 != histogram_vec_ptr->end(); ++iter1) {
-    for (auto iter2 = iter1->begin(); iter2 != iter1->end(); ++iter2) {
-      VLOG(202) << iter1 - histogram_vec_ptr->begin() << "," << iter2 - iter1->begin() << ":"
-                << iter2->first << " " << iter2->second;
-    }
-  }
-
+bool run_test1() {
   return true;
 }
 
@@ -209,9 +129,24 @@ bool run_test() {
   VLOG(11) << "Sample instance " << train_data.size() / 2
             << " is: " << instance_to_str(train_data[train_data.size() / 2]);
   VLOG(11) << "Data size is " << feature_matrix_ptr->size1() << "," << feature_matrix_ptr->size2();
+  std::vector<double> label_data;
+  for (auto iter = train_data.begin(); iter < train_data.end(); ++iter) {
+    label_data.push_back(iter->first);
+  }
+  std::shared_ptr<std::vector<double>> label_data_ptr =
+      std::make_shared<std::vector<double>>(label_data);
+  std::shared_ptr<pbtree::Distribution> distribution_ptr =
+      std::shared_ptr<pbtree::Distribution>(new pbtree::NormalDistribution());
+  pbtree::PBTree pbtree;  
+  pbtree::Tree tree;
+  std::shared_ptr<pbtree::PBTree> pbtree_ptr = std::make_shared<pbtree::PBTree>(pbtree);
+  tree.set_matrix_ptr(feature_matrix_ptr);
+  tree.set_pbtree(pbtree_ptr);
+  tree.set_distribution_ptr(distribution_ptr);
+  tree.set_label_data_ptr(label_data_ptr);
+  tree.build_tree();
 
-  pbtree::PBTree pbtree;
-  build_tree(train_data, feature_matrix_ptr, &pbtree);
+  // build_tree(train_data, feature_matrix_ptr, &pbtree);
   // pbtree::PBTree_Node* node = pbtree.add_tree();
   // node->set_level(0);
   // LOG(INFO) << pbtree.DebugString();

@@ -1,4 +1,4 @@
-// Train tree
+// utility
 #ifndef UTILITY_UTILITY_H_
 #define UTILITY_UTILITY_H_
 

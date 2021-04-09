@@ -19,7 +19,8 @@ class Utility {
   static bool split_string(
       const std::string &src, const char *separators,
       std::vector<std::string> *result);
-  static bool check_double_equal(const double& a, const double& b); 
+  static bool check_double_equal(const double& a, const double& b);
+  static bool check_double_le(const double& a, const double& b);  // less or equal
 };
 }  // namespace pbtree
 

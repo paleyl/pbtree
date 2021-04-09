@@ -12,28 +12,40 @@
 #include "boost/numeric/ublas/io.hpp"
 
 #include "glog/logging.h"
+#include "gflags/gflags.h"
+
+#include "Tree.pb.h"
 
 namespace pbtree {
 class Distribution {
  public:
   Distribution() {};
   virtual ~Distribution() {};
-  virtual double calculate_loss(
+  virtual bool calculate_loss(
       const std::vector<double>& label_data,
-      const uint64_t& col_index,
       const std::vector<uint64_t>& row_index_vec,
-      const double& split_point) {
-        return 0;
-  };
-  // virtual double mean() = 0;
+      double* loss, double* p1 = nullptr,
+      double* p2 = nullptr, double* p3 = nullptr) = 0;
+
+  virtual bool set_tree_node_param(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& row_index_vec,
+      PBTree_Node* node) = 0;
 };
 
 class NormalDistribution : public Distribution {
  public:
-  double calculate_loss(
+  bool calculate_loss(
       const std::vector<double>& train_data,
-      const uint64_t& col_index,
-      const std::vector<uint64_t>& row_index_vec);
+      const std::vector<uint64_t>& row_index_vec,
+      double* loss, double* p1 = nullptr,
+      double* p2 = nullptr, double* p3 = nullptr);
+
+  bool set_tree_node_param(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& row_index_vec,
+      PBTree_Node* node);
+
   void print_version() {
     VLOG(202) << "Normal distribution";
   }

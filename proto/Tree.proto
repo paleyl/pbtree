@@ -2,14 +2,24 @@ syntax = "proto2";
 package pbtree;
 
 message PBTree {
+
+  enum DistributionType {
+    NORMAL_DISTRIBUITION = 0;
+    GAMMA_DISTRIBUTION = 1;
+    BINOMIAL_DISTRIBUTION = 2;
+  }
+
   message Node {
     required int32 level = 1;
-    optional Node leftchild = 2;
-    optional Node rightchild = 3;
-    optional double mu = 4;
-    optional double sigma = 5;
-    optional int64 split_feature_index = 6;
-    optional double split_feature_value = 7;
+    optional Node left_child = 2;
+    optional Node right_child = 3;
+    optional int64 split_feature_index = 4;
+    optional double split_feature_value = 5;
+    optional DistributionType distribution_type = 6;
+    optional double p1 = 7;
+    optional double p2 = 8;
+    optional double p3 = 9;
+    optional double loss = 10;
   }
   repeated Node tree = 1;
 }

@@ -45,6 +45,13 @@ bool Utility::check_double_equal(const double& a, const double& b) {
   else
     return true;
 }
+
+bool Utility::check_double_le(const double& a, const double& b) {
+  if (a - b > -1e-10)
+    return true;
+  else
+    return false;
+}
 // bool read_data(const std::string& data_path, label_data_t* data) {
 //   FILE* fp1 = fopen(data_path.data(), "r");
 //   if (fp1 == nullptr) {

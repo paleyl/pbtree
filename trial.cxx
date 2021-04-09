@@ -145,6 +145,7 @@ bool run_test() {
   tree.set_distribution_ptr(distribution_ptr);
   tree.set_label_data_ptr(label_data_ptr);
   tree.build_tree();
+  VLOG(102) << pbtree_ptr->DebugString();
 
   // build_tree(train_data, feature_matrix_ptr, &pbtree);
   // pbtree::PBTree_Node* node = pbtree.add_tree();

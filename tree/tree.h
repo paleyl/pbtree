@@ -24,14 +24,24 @@ class Tree {
  public:
   bool build_tree();
 
+  bool create_node(const std::vector<uint64_t>& row_index_vec,
+      const uint32_t& level,
+      std::shared_ptr<PBTree_Node>* node);
+
   bool build_histogram(
       const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
       const uint64_t feature_index,
       std::vector<std::pair<double, float>>* histogram); 
 
-  bool find_split(
+  bool find_all_feature_split(
       const std::vector<uint64_t>& row_index_vec,
-      const uint64_t& col_index, double* split_point);
+      uint64_t* split_feature_index, double* split_point,
+      double* split_loss);
+
+  bool find_one_feature_split(
+      const std::vector<uint64_t>& row_index_vec,
+      const uint64_t& col_index, double* split_point,
+      double* split_loss);
 
   void set_pbtree(std::shared_ptr<PBTree> pbtree_ptr) {
     m_pbtree_ptr_ = pbtree_ptr;

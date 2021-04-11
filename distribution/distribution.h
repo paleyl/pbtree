@@ -15,6 +15,7 @@
 #include "gflags/gflags.h"
 
 #include "Tree.pb.h"
+#include "utility/utility.h"
 
 namespace pbtree {
 class Distribution {

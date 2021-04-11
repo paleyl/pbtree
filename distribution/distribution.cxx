@@ -18,14 +18,20 @@ bool NormalDistribution::calculate_loss(
     square_sum += label_data[*iter] * label_data[*iter];
   }
   mu /= row_index_vec.size();
-  // (EX)^2 - E(X^2)
-  double variance = mu * mu - square_sum / row_index_vec.size();
-  sigma = sqrt(variance);
-  VLOG(102) << sigma;
+  // E(X^2) - (EX)^2
+  double variance = square_sum / row_index_vec.size() - mu * mu;
+  if (!Utility::check_double_le(0, variance)) {
+    sigma = -1;
+  } else if (Utility::check_double_equal(0, variance)) {
+    sigma = 0;
+  } else {
+    sigma = sqrt(variance);
+  }
+  // VLOG(102) << sigma;
   // Compute loss
   double tmp_loss = 0;
   for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
-    tmp_loss += (mu - *iter) * (mu - *iter);
+    tmp_loss += (mu - label_data[*iter]) * (mu - label_data[*iter]);
   }
   tmp_loss /= row_index_vec.size();
   *loss = tmp_loss;
@@ -47,8 +53,15 @@ bool NormalDistribution::set_tree_node_param(
     square_sum += label_data[*iter] * label_data[*iter];
   }
   mu /= row_index_vec.size();
-  // (EX)^2 - E(X^2)
-  double variance = mu * mu - square_sum / row_index_vec.size();
+  // E(X^2) - (EX)^2
+  double variance = square_sum / row_index_vec.size() - mu * mu;
+  if (!Utility::check_double_le(0, variance)) {
+    sigma = -1;
+  } else if (Utility::check_double_equal(0, variance)) {
+    sigma = 0;
+  } else {
+    sigma = sqrt(variance);
+  }
   sigma = sqrt(variance);
   node->set_p1(mu);
   node->set_p2(sigma);

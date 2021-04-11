@@ -2,6 +2,8 @@
 #ifndef TREE_TREE_H_
 #define TREE_TREE_H_
 
+#include "float.h"
+
 #include "stdint.h"
 #include <string>
 #include <vector>
@@ -24,13 +26,24 @@ class Tree {
  public:
   bool build_tree();
 
+  bool predict(
+      const boost::numeric::ublas::matrix_row<
+      boost::numeric::ublas::compressed_matrix<double>>& record,
+      double* p1, double* p2, double* p3);
+
+  bool predict_one_tree(
+      const boost::numeric::ublas::matrix_row<
+      boost::numeric::ublas::compressed_matrix<double>>& record,
+      const PBTree_Node& root, double* p1, double* p2, double* p3);
+
   bool create_node(const std::vector<uint64_t>& row_index_vec,
       const uint32_t& level,
-      std::shared_ptr<PBTree_Node>* node);
+      PBTree_Node* node);
 
   bool build_histogram(
-      const std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>& matrix_ptr,
+      const std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>& matrix_ptr,
       const uint64_t feature_index,
+      const boost::numeric::ublas::compressed_matrix<double>::iterator1& col_iter,
       std::vector<std::pair<double, float>>* histogram); 
 
   bool find_all_feature_split(
@@ -47,7 +60,7 @@ class Tree {
     m_pbtree_ptr_ = pbtree_ptr;
   }
   void set_matrix_ptr(
-      std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>> matrix_ptr) {
+      std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> matrix_ptr) {
     m_matrix_ptr_ = matrix_ptr;
   }
   void set_label_data_ptr(
@@ -61,7 +74,7 @@ class Tree {
 
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
-  std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>> m_matrix_ptr_;
+  std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
   std::shared_ptr<std::vector<double>> m_label_data_ptr_;
   std::shared_ptr<std::vector
       <std::vector<std::pair<double, float>>>> m_histogram_vec_ptr_;

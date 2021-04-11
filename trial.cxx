@@ -35,7 +35,7 @@ typedef std::vector<featurevec_t> predict_data_t;
 bool read_data(
     const std::string& data_path,
     label_data_t* data,
-    std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>>* matrix) {
+    std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>* matrix) {
   FILE* fp1 = fopen(data_path.data(), "r");
   if (fp1 == nullptr) {
     LOG(ERROR) << "Open input data failed! " << data_path;
@@ -65,17 +65,27 @@ bool read_data(
     }
     data->push_back(std::make_pair(label, tmp_featurevec));
   }
-  boost::numeric::ublas::mapped_matrix<double>
-      mat(data->size(), feature_max_ind + 1, feature_val_num + 1);
+  boost::numeric::ublas::compressed_matrix<double>
+      mat(feature_max_ind + 1, data->size(), feature_val_num + 1);
+  std::vector<std::pair<std::pair<uint64_t, uint64_t>, double>> tmp_data_vec;
   auto mat_ptr =
-      std::make_shared<boost::numeric::ublas::mapped_matrix<double>>(mat);
+      std::make_shared<boost::numeric::ublas::compressed_matrix<double>>(mat);
   for (unsigned long i = 0; i < data->size(); ++i) {
     for (unsigned int j = 0; j < (*data)[i].second.size(); ++j) {
       uint64_t ind = (*data)[i].second[j].first;
       double val = (*data)[i].second[j].second;
       VLOG(202) << i << "," << ind << ":" << val;
-      (*mat_ptr)(i, ind) = val;
+      tmp_data_vec.push_back(std::make_pair(std::make_pair(ind, i), val));
+//      (*mat_ptr)(ind, i) = val;
     }
+  }
+  std::sort(tmp_data_vec.begin(), tmp_data_vec.end(),
+      [](const std::pair<std::pair<uint64_t, uint64_t>, double>& a,
+      const std::pair<std::pair<uint64_t, uint64_t>, double>& b){
+        return a.first.first < b.first.first;
+      });
+  for (auto iter = tmp_data_vec.begin(); iter != tmp_data_vec.end(); ++iter) {
+    (*mat_ptr)(iter->first.first, iter->first.second) = iter->second;
   }
   *matrix = mat_ptr;
   return true;
@@ -92,21 +102,24 @@ std::string instance_to_str(const instance_t& instance) {
 
 int blas_trial () {
   using namespace boost::numeric::ublas;
-  mapped_matrix<double> m (3, 3, 3 * 3);
+  compressed_matrix<double> m (3, 3, 3 * 3);
   for (unsigned i = 0; i < m.size1 (); ++ i)
       for (unsigned j = 0; j < m.size2 () - 1; ++ j)
           m (i, j) = 3 * i + j;
   VLOG(100) << m;
   auto r1 = m.begin1();
+  VLOG(100) << "r1.index1 " << r1.index1() << " r1.index2 " << r1.index2();
   VLOG(100) << *(r1.begin());
-  matrix_row<mapped_matrix<double>> ma = row(m, 2);
+  matrix_row<compressed_matrix<double>> ma = row(m, 2);
+  // VLOG(102) << "ma value size = " << ma.end() - ma.begin()
+  //           << "ma full size = " << ma.size();
   // std::sort(ma.begin(), ma.end());
   std::vector<double> vec;
   for (unsigned i = 0; i < ma.size(); ++i) {
     vec.push_back(ma[i]);
   }
-  std::sort(vec.begin(), vec.end(), [](double a, double b) {return a > b;});
-  for (auto it = vec.cbegin(); it != vec.end(); ++it) {
+  std::sort(vec.begin(), vec.end(), [](double a, double b) {return a < b;});
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
     VLOG(100) << *it;
   }
   //VLOG(100) << *(r1.begin());
@@ -119,7 +132,7 @@ bool run_test1() {
 
 bool run_test() {
   label_data_t train_data;
-  std::shared_ptr<boost::numeric::ublas::mapped_matrix<double>> feature_matrix_ptr;
+  std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> feature_matrix_ptr;
   if (!read_data(FLAGS_input_train_data_path, &train_data, &feature_matrix_ptr)) {
     LOG(ERROR) << "Read train data failed";
     return false;
@@ -129,9 +142,21 @@ bool run_test() {
   VLOG(11) << "Sample instance " << train_data.size() / 2
             << " is: " << instance_to_str(train_data[train_data.size() / 2]);
   VLOG(11) << "Data size is " << feature_matrix_ptr->size1() << "," << feature_matrix_ptr->size2();
+  uint32_t t_count = 0;
+  VLOG(1) << "Begint get t_count";
+  for (auto iter = feature_matrix_ptr->begin1(); iter != feature_matrix_ptr->end1(); ++iter) {
+    for (auto iter1 = iter.begin(); iter1 != iter.end(); ++iter1) {
+      if (*iter1 > 0.0)
+        ++t_count; 
+    }
+  }
+  VLOG(1) << "End t_count = " << t_count;
   std::vector<double> label_data;
   for (auto iter = train_data.begin(); iter < train_data.end(); ++iter) {
     label_data.push_back(iter->first);
+  }
+  for (auto iter = label_data.begin(); iter < label_data.end(); ++iter) {
+    VLOG(202) << "Label data " << iter - label_data.begin() << " " << *iter;
   }
   std::shared_ptr<std::vector<double>> label_data_ptr =
       std::make_shared<std::vector<double>>(label_data);
@@ -145,8 +170,15 @@ bool run_test() {
   tree.set_distribution_ptr(distribution_ptr);
   tree.set_label_data_ptr(label_data_ptr);
   tree.build_tree();
-  VLOG(102) << pbtree_ptr->DebugString();
-
+  LOG(INFO) << pbtree_ptr->DebugString();
+  // for (unsigned int row_index = 0; row_index < feature_matrix_ptr->size1(); ++row_index) {
+  //   boost::numeric::ublas::matrix_row<
+  //       boost::numeric::ublas::compressed_matrix<double>> record =
+  //           boost::numeric::ublas::row(*feature_matrix_ptr, row_index);
+  //   double p1, p2, p3;
+  //   tree.predict(record, &p1, &p2, &p3);
+  //   VLOG(102) << row_index << " " << p1 << " " << p2 << " " << p3;
+  // }
   // build_tree(train_data, feature_matrix_ptr, &pbtree);
   // pbtree::PBTree_Node* node = pbtree.add_tree();
   // node->set_level(0);

@@ -22,12 +22,14 @@ list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/proto/build/libtree_proto.a")
 list(APPEND EXTRA_INCLUDES tree_proto)
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/boost_1_75_0/")
 
-add_subdirectory(utility)
-list(APPEND EXTRA_LIBS utility)
 add_subdirectory(distribution)
 list(APPEND EXTRA_LIBS distribution)
 add_subdirectory(tree)
 list(APPEND EXTRA_LIBS tree)
+add_subdirectory(io)
+list(APPEND EXTRA_LIBS io)
+add_subdirectory(utility)
+list(APPEND EXTRA_LIBS utility)
 
 add_executable(Trial trial.cxx)
 

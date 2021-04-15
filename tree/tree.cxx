@@ -53,7 +53,7 @@ bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
   if (row_index_vec.size() < FLAGS_split_min_count ||
       level > FLAGS_tree_max_depth) {
     node->Clear();
-    return true;
+    return false;
   };
   LOG(INFO) << "Building node on level " << level;
   uint64_t split_feature_index = 0;
@@ -86,8 +86,13 @@ bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
     }
   }
   uint32_t next_level = level + 1;
-  create_node(left_index_vec, next_level, left_child);
-  create_node(right_index_vec, next_level, right_child);
+  if (!create_node(left_index_vec, next_level, left_child)) {
+    node->clear_left_child();
+  }
+
+  if (!create_node(right_index_vec, next_level, right_child)) {
+    node->clear_right_child();
+  }
   // if ()
   return true;
 }
@@ -115,12 +120,12 @@ bool Tree::find_all_feature_split(
 }
 
 bool Tree::find_one_feature_split(
-    const std::vector<uint64_t>& row_index_vec, const uint64_t& col_index,
+    const std::vector<uint64_t>& record_index_vec, const uint64_t& feature_index,
     double* split_point, double* split_loss) {
-  const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[col_index];
+  const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
   std::vector<std::pair<double, double>> candidate_split_vec;
   if (histogram.empty()) {
-    VLOG(102) << "Col index " << col_index << " empty histogram";
+    VLOG(102) << "Col index " << feature_index << " empty histogram";
     return false;
   }
   if (histogram.size() == 1) {
@@ -138,8 +143,8 @@ bool Tree::find_one_feature_split(
 
     std::vector<uint64_t> left_index_vec;
     std::vector<uint64_t> right_index_vec;
-    for (auto row_iter = row_index_vec.begin(); row_iter != row_index_vec.end(); ++row_iter) {
-      if (Utility::check_double_le((*m_matrix_ptr_)(col_index, *row_iter), histogram_iter->first)) {
+    for (auto row_iter = record_index_vec.begin(); row_iter != record_index_vec.end(); ++row_iter) {
+      if (Utility::check_double_le((*m_matrix_ptr_)(feature_index, *row_iter), histogram_iter->first)) {
         // left_label_vec.push_back((*m_label_data_ptr_)[*row_iter]);
         left_index_vec.push_back(*row_iter);
       } else {
@@ -156,7 +161,7 @@ bool Tree::find_one_feature_split(
     m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, right_index_vec, &right_loss);
 
     double total_loss = left_index_vec.size() * left_loss + right_index_vec.size() * right_loss;
-    VLOG(101) << "Col index: " << col_index << " split point = " << histogram_iter->first
+    VLOG(101) << "Feature index: " << feature_index << " split point = " << histogram_iter->first
               << " left_index_vec.size() = " << left_index_vec.size()
               << " left_loss = " << left_loss
               << " right_index_vec.size() = " << right_index_vec.size()
@@ -168,7 +173,7 @@ bool Tree::find_one_feature_split(
       {return a.second < b.second;});
   *split_point = candidate_split_vec[0].first;
   *split_loss = candidate_split_vec[0].second;
-  VLOG(102) << "col_index " << col_index << " split point is " << *split_point
+  VLOG(102) << "col_index " << feature_index << " split point is " << *split_point
             << " split loss is " << *split_loss;
   return true;
 }
@@ -176,7 +181,7 @@ bool Tree::find_one_feature_split(
 bool Tree::build_histogram(
     const std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>& matrix_ptr,
     const uint64_t feature_index,
-    const boost::numeric::ublas::compressed_matrix<double>::iterator1& col_iter,
+    const boost::numeric::ublas::compressed_matrix<double>::iterator1& feature_iter,
     std::vector<std::pair<double, float>>* histogram) {
   using namespace boost::numeric::ublas;
   VLOG(103) << "Begin building column";
@@ -185,12 +190,12 @@ bool Tree::build_histogram(
   // auto col_iter = matrix_ptr->begin2();
   // col_iter = col_iter + feature_index;
   uint64_t non_zero_count = 0;
-  for (auto iter = col_iter.begin(); iter != col_iter.end(); ++iter) {
+  for (auto iter = feature_iter.begin(); iter != feature_iter.end(); ++iter) {
     ++non_zero_count;
   }
   VLOG(103) << "Begin push non zero value";
   std::vector<double> vec;
-  for (auto iter = col_iter.begin(); iter != col_iter.end(); ++iter) {
+  for (auto iter = feature_iter.begin(); iter != feature_iter.end(); ++iter) {
     vec.push_back(*iter);
   }
   VLOG(103) << "Feature index " << feature_index
@@ -255,11 +260,11 @@ bool Tree::build_tree() {
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
   PBTree_Node* root = m_pbtree_ptr_->add_tree();
-  std::vector<uint64_t> row_index_vec;
+  std::vector<uint64_t> feature_index_vec;
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
-    row_index_vec.push_back(i);
+    feature_index_vec.push_back(i);
   }
-  create_node(row_index_vec, 0, root);
+  create_node(feature_index_vec, 0, root);
 
   return true;
 }

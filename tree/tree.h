@@ -43,7 +43,7 @@ class Tree {
   bool build_histogram(
       const std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>& matrix_ptr,
       const uint64_t feature_index,
-      const boost::numeric::ublas::compressed_matrix<double>::iterator1& col_iter,
+      const boost::numeric::ublas::compressed_matrix<double>::iterator1& feature_iter,
       std::vector<std::pair<double, float>>* histogram); 
 
   bool find_all_feature_split(
@@ -52,8 +52,8 @@ class Tree {
       double* split_loss);
 
   bool find_one_feature_split(
-      const std::vector<uint64_t>& row_index_vec,
-      const uint64_t& col_index, double* split_point,
+      const std::vector<uint64_t>& record_index_vec,
+      const uint64_t& feature_index, double* split_point,
       double* split_loss);
 
   void set_pbtree(std::shared_ptr<PBTree> pbtree_ptr) {

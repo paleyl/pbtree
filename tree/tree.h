@@ -36,7 +36,7 @@ class Tree {
       boost::numeric::ublas::compressed_matrix<double>>& record,
       const PBTree_Node& root, double* p1, double* p2, double* p3);
 
-  bool create_node(const std::vector<uint64_t>& row_index_vec,
+  bool create_node(const std::vector<uint64_t>& record_index_vec,
       const uint32_t& level,
       PBTree_Node* node);
 

@@ -16,8 +16,9 @@
 #include "boost/numeric/ublas/matrix_sparse.hpp"
 #include "boost/numeric/ublas/io.hpp"
 
-#include "io/data_manager.h"
+#include "analysis/analysis.h"
 #include "distribution/distribution.h"
+#include "io/data_manager.h"
 #include "proto/build/Tree.pb.h"
 #include "tree/tree.h"
 #include "utility/utility.h"
@@ -25,6 +26,7 @@
 DEFINE_string(input_train_data_path, "", "");
 DEFINE_string(output_model_path, "", "");
 DEFINE_string(input_model_path, "", "");
+DEFINE_string(input_fam_path, "", "");
 DEFINE_string(input_test_data_path, "", "");
 DEFINE_string(running_mode, "train", "");
 
@@ -52,6 +54,14 @@ int blas_trial () {
   }
   //VLOG(100) << *(r1.begin());
   return 0;
+}
+
+bool run_analysis() {
+  pbtree::AnalysisManager analysis_manager;
+  analysis_manager.load_fam(FLAGS_input_fam_path);
+  analysis_manager.load_pbtree(FLAGS_input_model_path);
+  analysis_manager.analysis_tree_model();
+  return true;
 }
 
 bool run_test() {
@@ -130,21 +140,6 @@ bool run_train() {
   std::ofstream fout(FLAGS_output_model_path.data(), std::ios::out | std::ios::binary);
   fout << model_output_str;
   fout.close();
-  // for (unsigned int row_index = 0; row_index < feature_matrix_ptr->size1(); ++row_index) {
-  //   boost::numeric::ublas::matrix_row<
-  //       boost::numeric::ublas::compressed_matrix<double>> record =
-  //           boost::numeric::ublas::row(*feature_matrix_ptr, row_index);
-  //   double p1, p2, p3;
-  //   tree.predict(record, &p1, &p2, &p3);
-  //   VLOG(102) << row_index << " " << p1 << " " << p2 << " " << p3;
-  // }
-  // build_tree(train_data, feature_matrix_ptr, &pbtree);
-  // pbtree::PBTree_Node* node = pbtree.add_tree();
-  // node->set_level(0);
-  // LOG(INFO) << pbtree.DebugString();
-  // std::string out;
-  // pbtree.SerializeToString(&out);
-  // blas_trial();
   return true;
 }
 
@@ -155,8 +150,8 @@ int main (int argc, char** argv) {
     run_train();
   } else if (FLAGS_running_mode == "test") {
     run_test();
+  } else if (FLAGS_running_mode == "analysis") {
+    run_analysis();
   }
-  
-  // blas_trial();
   return 0;
 }

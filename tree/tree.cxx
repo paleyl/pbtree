@@ -47,10 +47,10 @@ bool Tree::predict(
   return true;
 }
 
-bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
+bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     const uint32_t& level,
     PBTree_Node* node) {
-  if (row_index_vec.size() < FLAGS_split_min_count ||
+  if (record_index_vec.size() < FLAGS_split_min_count ||
       level > FLAGS_tree_max_depth) {
     node->Clear();
     return false;
@@ -60,13 +60,13 @@ bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
   double split_point = 0;
   double split_loss = 0;
   find_all_feature_split(
-      row_index_vec, &split_feature_index, &split_point, &split_loss);
+      record_index_vec, &split_feature_index, &split_point, &split_loss);
   node->set_level(level);
   node->set_split_feature_index(split_feature_index);
   node->set_split_feature_value(split_point);
   LOG(INFO) << "Level " << level << " split_feature_index = " << split_feature_index
             << " split_point = " << split_point;
-  m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, row_index_vec, node);
+  m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
   // std::shared_ptr<PBTree_Node> left_child_ptr =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
   // std::shared_ptr<PBTree_Node> right_child_ptr =
@@ -77,12 +77,12 @@ bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
   node->set_allocated_right_child(right_child);
   std::vector<uint64_t> left_index_vec;
   std::vector<uint64_t> right_index_vec;
-  for (unsigned int row_index = 0; row_index < m_matrix_ptr_->size2(); ++row_index) {
+  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
     if (Utility::check_double_le(
-        (*m_matrix_ptr_)(split_feature_index, row_index), split_point)) {
-      left_index_vec.push_back(row_index);
+        (*m_matrix_ptr_)(split_feature_index, *iter), split_point)) {
+      left_index_vec.push_back(*iter);
     } else {
-      right_index_vec.push_back(row_index);
+      right_index_vec.push_back(*iter);
     }
   }
   uint32_t next_level = level + 1;
@@ -98,15 +98,21 @@ bool Tree::create_node(const std::vector<uint64_t>& row_index_vec,
 }
 
 bool Tree::find_all_feature_split(
-    const std::vector<uint64_t>& row_index_vec,
+    const std::vector<uint64_t>& record_index_vec,
     uint64_t* split_feature_index, double* split_point,
     double* split_loss) {
+  if (record_index_vec.size() <= FLAGS_split_min_count) {
+    return false;
+  }
   std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
   for (unsigned long col_index = 0; col_index < m_matrix_ptr_->size1(); ++col_index) {
     double tmp_split_point = 0, tmp_split_loss = 0;
-    if (find_one_feature_split(row_index_vec, col_index, &tmp_split_point, &tmp_split_loss))
+    if (find_one_feature_split(record_index_vec, col_index, &tmp_split_point, &tmp_split_loss))
       candidate_split_vec.push_back(
           std::make_pair(col_index, std::make_pair(tmp_split_point, tmp_split_loss)));
+  }
+  if (candidate_split_vec.size() <= 0) {
+    return false;
   }
   std::sort(candidate_split_vec.begin(), candidate_split_vec.end(),
       [](std::pair<uint64_t, std::pair<double, double>>& a,

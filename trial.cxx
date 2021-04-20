@@ -30,6 +30,8 @@ DEFINE_string(input_fam_path, "", "");
 DEFINE_string(input_test_data_path, "", "");
 DEFINE_string(running_mode, "train", "");
 
+// what to do next, use forest and calculate mixture
+
 int blas_trial () {
   using namespace boost::numeric::ublas;
   compressed_matrix<double> m (3, 3, 3 * 3);
@@ -61,6 +63,7 @@ bool run_analysis() {
   analysis_manager.load_fam(FLAGS_input_fam_path);
   analysis_manager.load_pbtree(FLAGS_input_model_path);
   analysis_manager.analysis_tree_model();
+  analysis_manager.plot_tree_model();
   return true;
 }
 

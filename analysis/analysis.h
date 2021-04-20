@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -35,6 +36,17 @@ class AnalysisManager {
   bool save_model(const std::string& data_path);
 
   bool analysis_tree_model();
+
+  bool plot_tree_model();
+
+  bool draw_one_node(
+      const PBTree_Node& node, const uint32_t& parent_node_id,
+      const std::string& parent_split_condition,
+      std::string* output_str, uint32_t* node_id);
+
+  bool draw_one_tree(
+      const PBTree_Node& node, const uint32_t& tree_index,
+      std::string* output_str);
 
   // bool explore_node(const PBTree_Node& node);
 

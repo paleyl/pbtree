@@ -1,5 +1,9 @@
-// #include <unordered_map>
+#include <iomanip>
 #include "analysis.h"
+
+DEFINE_string(output_dot_file, "tmp_file.dot", "");
+DEFINE_string(output_png_file, "treeplot.png", "");
+DEFINE_int32(analysis_tree_depth, 4, "");
 
 namespace pbtree {
 
@@ -43,6 +47,96 @@ bool AnalysisManager::analysis_tree_model() {
     LOG(INFO) << "Level " << node_ptr_vec[pos].first->level() << " " << node_ptr_vec[pos].second;
     ++pos;
   }
+  return true;
+}
+
+bool AnalysisManager::draw_one_node(
+    const PBTree_Node& node, const uint32_t& parent_node_id,
+    const std::string& parent_split_condition,
+    std::string* output_str, uint32_t* node_id) {
+  if (node.level() > FLAGS_analysis_tree_depth) {
+    return true;
+  }
+  uint32_t current_node_id = *node_id;
+  if (current_node_id != 0) {
+    *output_str = *output_str
+        + "node_" + std::to_string(parent_node_id)
+        + " -- node_" + std::to_string(current_node_id)
+        + "; \n";
+  }
+
+  std::stringstream distribution_ss;
+  distribution_ss << "p1=" << std::fixed << std::setprecision(2)
+                  << node.p1() << ","
+                  << "p2=" << std::fixed << std::setprecision(2)
+                  << node.p2() << ","
+                  << "p3=" << std::fixed << std::setprecision(2)
+                  << node.p3();
+  *output_str = *output_str
+      + "node_" + std::to_string(current_node_id)
+      + " [label=\""
+      + parent_split_condition + "\n"
+      + distribution_ss.str()
+      + "\"] ;\n"
+      ;
+  ++(*node_id);
+  auto iter = m_feature_map_ptr_->find(node.split_feature_index());
+  std::string feature_name = "undefined";
+  if (iter != m_feature_map_ptr_->end()) {
+    feature_name = iter->second;
+  }
+  if (node.has_left_child()) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(2) << node.split_feature_value();
+    draw_one_node(node.left_child(), current_node_id,
+    feature_name + "\n<=" + stream.str(), output_str, node_id);
+  }
+  if (node.has_right_child()) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(2) << node.split_feature_value();
+    draw_one_node(node.right_child(), current_node_id,
+    feature_name + "\n>" + stream.str(), output_str, node_id);
+  }
+  return true;
+}
+
+bool AnalysisManager::draw_one_tree(
+    const PBTree_Node& node, const uint32_t& tree_index,
+    std::string* output_str) {
+  *output_str = *output_str
+      + "subgraph tree\n"
+      + "{\n"
+      + "label=\"tree_" + std::to_string(tree_index) + "\"\n"
+      + "node_0 ;\n"
+  ;
+
+  //  root first dfs
+  uint32_t node_id = 0;
+  draw_one_node(node, 0, "root", output_str, &node_id);
+  *output_str = *output_str 
+      + "}\n";
+  return true;
+}
+
+bool AnalysisManager::plot_tree_model() {
+  if (m_feature_map_ptr_.get() == nullptr && !analysis_tree_model()) {
+    return false;
+  }
+  // DFS to write dot file
+  std::ofstream dot_file; 
+  dot_file.open(FLAGS_output_dot_file);
+  dot_file << 
+  "graph \"\"\n"
+  "{\n"
+  "label=\"pbtree model\"\n"
+  ;
+
+  std::string output_str;
+  for (int i = 0; i < m_pbtree_ptr_->tree_size(); ++i) {
+    draw_one_tree(m_pbtree_ptr_->tree(0), i, &output_str);
+  }
+  dot_file << output_str;
+  dot_file << "}\n";
   return true;
 }
 

@@ -2,8 +2,10 @@
 #include "analysis.h"
 
 DEFINE_string(output_dot_file, "tmp_file.dot", "");
-DEFINE_string(output_png_file, "treeplot.png", "");
+DEFINE_string(output_plot_directory, "plot", "");
+DEFINE_string(draw_script, "python3", "");
 DEFINE_int32(analysis_tree_depth, 4, "");
+DEFINE_bool(plot_image, true, "");
 
 namespace pbtree {
 
@@ -53,6 +55,7 @@ bool AnalysisManager::analysis_tree_model() {
 bool AnalysisManager::draw_one_node(
     const PBTree_Node& node, const uint32_t& parent_node_id,
     const std::string& parent_split_condition,
+    const std::vector<uint64_t>& record_vec,
     std::string* output_str, uint32_t* node_id) {
   if (node.level() > FLAGS_analysis_tree_depth) {
     return true;
@@ -61,8 +64,10 @@ bool AnalysisManager::draw_one_node(
   if (current_node_id != 0) {
     *output_str = *output_str
         + "node_" + std::to_string(parent_node_id)
-        + " -- node_" + std::to_string(current_node_id)
-        + "; \n";
+        + " -> node_" + std::to_string(current_node_id)
+        + "[penwidth=0.3 color=\"#444443\" label=\""
+        + parent_split_condition
+        + "\"] ;\n";
   }
 
   std::stringstream distribution_ss;
@@ -72,30 +77,90 @@ bool AnalysisManager::draw_one_node(
                   << node.p2() << ","
                   << "p3=" << std::fixed << std::setprecision(2)
                   << node.p3();
-  *output_str = *output_str
-      + "node_" + std::to_string(current_node_id)
-      + " [label=\""
-      + parent_split_condition + "\n"
-      + distribution_ss.str()
-      + "\"] ;\n"
-      ;
+
   ++(*node_id);
   auto iter = m_feature_map_ptr_->find(node.split_feature_index());
   std::string feature_name = "undefined";
   if (iter != m_feature_map_ptr_->end()) {
     feature_name = iter->second;
   }
+  std::vector<uint64_t> left_record_vec;
+  std::vector<uint64_t> right_record_vec;
+  for (uint64_t i = 0; i < record_vec.size(); ++i) {
+    if (Utility::check_double_le(
+        (*m_matrix_ptr_)(node.split_feature_index(), record_vec[i]),
+        node.split_feature_value())) {
+      left_record_vec.push_back(record_vec[i]);
+    } else {
+      right_record_vec.push_back(record_vec[i]);
+    }
+  }
+
+  if (FLAGS_plot_image) {
+    // node5 [margin="0" shape=none label= <<table border="0"><tr><td><img src="plot/plot1/xxx.svg"/></td></tr></table>>]
+
+    // Write hist_file
+    std::ofstream hist_file;
+    std::string hist_file_name = FLAGS_output_plot_directory + "/node_"
+        + std::to_string(current_node_id) + "_hist_file.txt";
+    hist_file.open(hist_file_name);
+    hist_file << "y\n";
+    for (uint64_t i = 0; i < record_vec.size(); ++i) {
+      hist_file << (*m_label_vec_ptr_)[record_vec[i]] << "\n";
+    }
+    hist_file.close();
+
+    // Write distribution file
+    std::shared_ptr<pbtree::Distribution> distribution_ptr =
+        DistributionManager::get_distribution(node.distribution_type());
+    std::string curve_str;
+    distribution_ptr->plot_distribution_curve(node.p1(), node.p2(), node.p3(), &curve_str);
+    std::ofstream curve_file;
+    std::string curve_file_name = FLAGS_output_plot_directory + "/node_"
+        + std::to_string(current_node_id) + "_curve_file.txt";
+    curve_file.open(curve_file_name);
+    curve_file << "x y\n";
+    curve_file << curve_str;
+    curve_file.close();
+
+    std::string cmd_str;
+    std::stringstream title_stream;
+    title_stream << "Level " << node.level() << " (" << std::fixed << std::setprecision(2)
+                  << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%)";
+    cmd_str = FLAGS_draw_script + " " + FLAGS_output_plot_directory + "/node_"
+        + std::to_string(current_node_id) + "_plot.svg"
+        + " " + curve_file_name + " " + hist_file_name
+        + " \"" + title_stream.str() + "\"";
+    LOG(INFO) << cmd_str;
+    system(cmd_str.data());
+    
+    // Write dot file
+    *output_str = *output_str
+        + "node_" + std::to_string(current_node_id)
+        + " [margin=\"0\" shape=none label=<<table border=\"0\"><tr><td><img src=\""
+        + FLAGS_output_plot_directory + "/node_"
+        + std::to_string(current_node_id) + "_plot.svg"
+        + "\"/></td></tr></table>>] ;\n";
+  } else {
+    *output_str = *output_str
+        + "node_" + std::to_string(current_node_id)
+        + " [label=\""
+        + parent_split_condition + "\n"
+        + distribution_ss.str()
+        + "\"] ;\n";
+  }
+
   if (node.has_left_child()) {
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << node.split_feature_value();
     draw_one_node(node.left_child(), current_node_id,
-    feature_name + "\n<=" + stream.str(), output_str, node_id);
+    feature_name + "<=" + stream.str(), left_record_vec, output_str, node_id);
   }
   if (node.has_right_child()) {
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << node.split_feature_value();
     draw_one_node(node.right_child(), current_node_id,
-    feature_name + "\n>" + stream.str(), output_str, node_id);
+    feature_name + ">" + stream.str(), right_record_vec, output_str, node_id);
   }
   return true;
 }
@@ -112,7 +177,11 @@ bool AnalysisManager::draw_one_tree(
 
   //  root first dfs
   uint32_t node_id = 0;
-  draw_one_node(node, 0, "root", output_str, &node_id);
+  std::vector<uint64_t> record_vec;
+  for (uint64_t i = 0; i < m_matrix_ptr_->size2(); ++i) {
+    record_vec.push_back(i);
+  }
+  draw_one_node(node, 0, "root", record_vec, output_str, &node_id);
   *output_str = *output_str 
       + "}\n";
   return true;
@@ -126,7 +195,7 @@ bool AnalysisManager::plot_tree_model() {
   std::ofstream dot_file; 
   dot_file.open(FLAGS_output_dot_file);
   dot_file << 
-  "graph \"\"\n"
+  "digraph \"\"\n"
   "{\n"
   "label=\"pbtree model\"\n"
   ;
@@ -137,6 +206,7 @@ bool AnalysisManager::plot_tree_model() {
   }
   dot_file << output_str;
   dot_file << "}\n";
+  dot_file.close();
   return true;
 }
 
@@ -154,6 +224,7 @@ bool AnalysisManager::load_pbtree(const std::string& data_path) {
     LOG(ERROR) << "Read data failed";
     return false;
   }
+  fclose(fp);
   std::shared_ptr<PBTree> pbtree_ptr = std::shared_ptr<PBTree>(new PBTree());
   if (!pbtree_ptr->ParseFromArray(buffer.data(), file_size)) {
     LOG(ERROR) << "Parse string failed";
@@ -182,6 +253,7 @@ bool AnalysisManager::load_fam(const std::string& data_path) {
     LOG(ERROR) << "Read data failed";
     return false;
   }
+  fclose(fp);
   // std::shared_ptr<advertiser::demographyestimate::FeatureAnalysisModelVec> fam_ptr =
   //     std::shared_ptr<advertiser::demographyestimate::FeatureAnalysisModelVec>(
   //         new advertiser::demographyestimate::FeatureAnalysisModelVec());

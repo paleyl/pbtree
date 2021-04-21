@@ -23,6 +23,7 @@
 #include "tree/tree.h"
 #include "utility/utility.h"
 
+DEFINE_string(input_analysis_data_path, "", "");
 DEFINE_string(input_train_data_path, "", "");
 DEFINE_string(output_model_path, "", "");
 DEFINE_string(input_model_path, "", "");
@@ -62,6 +63,19 @@ bool run_analysis() {
   pbtree::AnalysisManager analysis_manager;
   analysis_manager.load_fam(FLAGS_input_fam_path);
   analysis_manager.load_pbtree(FLAGS_input_model_path);
+
+  pbtree::DataManager data_manager;
+  std::vector<double> label_vec;
+  std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> feature_matrix_ptr;
+  if (!data_manager.read_train_data(
+      FLAGS_input_analysis_data_path, (uint32_t)1, &label_vec, &feature_matrix_ptr)) {
+    LOG(ERROR) << "Read analysis data failed";
+    return false;
+  }
+  analysis_manager.set_feature_matrix_ptr(feature_matrix_ptr);
+  std::shared_ptr<std::vector<double>> label_vec_ptr =
+      std::make_shared<std::vector<double>>(label_vec);
+  analysis_manager.set_label_vec_ptr(label_vec_ptr);
   analysis_manager.analysis_tree_model();
   analysis_manager.plot_tree_model();
   return true;

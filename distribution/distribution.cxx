@@ -1,9 +1,10 @@
 #include "math.h"
 #include "distribution.h"
 
+DEFINE_uint32(distribution_sample_point_num, 100, "");
 // DEFINE_int32(input_data_line_width, 4096, "");
 
-namespace pbtree{
+namespace pbtree {
 
 bool NormalDistribution::calculate_loss(
     const std::vector<double>& label_data,
@@ -69,4 +70,61 @@ bool NormalDistribution::set_tree_node_param(
   return true;
 }
 
+bool NormalDistribution::plot_distribution_curve(
+    const double& p1, const double& p2,
+    const double& p3,
+    std::string* output_str) {
+  boost::math::normal_distribution<double> dist(p1, p2);
+  
+  const double lower_bound = p1 - 5 * p2;
+  const double upper_bound = p1 + 5 * p2;
+  const double step = (upper_bound - lower_bound) / FLAGS_distribution_sample_point_num;
+  std::stringstream ss;
+  for (unsigned int i = 0; i < FLAGS_distribution_sample_point_num; ++i) {
+    double x = i * step + lower_bound;
+    double y = boost::math::pdf(dist, x);
+    ss << x << " " << y << "\n";
+  }
+  *output_str = ss.str();
+  return true;
 }
+
+std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_DistributionType type) {
+  std::shared_ptr<Distribution> distribution_ptr;
+  switch (type)
+  {
+  case PBTree_DistributionType_NORMAL_DISTRIBUITION:
+    distribution_ptr = std::shared_ptr<Distribution>(new NormalDistribution());
+    break;
+  case PBTree_DistributionType_GAMMA_DISTRIBUTION:
+    distribution_ptr = std::shared_ptr<Distribution>(new GammaDistribution());
+    break;
+  default:
+    LOG(FATAL) << "Unrecognized distribution type " << type;
+    break;
+  }
+  return distribution_ptr;
+}
+
+bool GammaDistribution::calculate_loss(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
+  return true;
+}
+
+bool GammaDistribution::set_tree_node_param(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    PBTree_Node* node) {
+  return true;
+}
+
+bool GammaDistribution::plot_distribution_curve(
+    const double& p1, const double& p2,
+    const double& p3,
+    std::string* output_str) {
+  return true;
+}
+
+}  // pbtree

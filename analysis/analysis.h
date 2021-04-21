@@ -20,6 +20,7 @@
 #include "boost/numeric/ublas/matrix_sparse.hpp"
 #include "boost/numeric/ublas/io.hpp"
 
+#include "distribution/distribution.h"
 #include "FeatureAnalysisModel.pb.h"
 #include "Tree.pb.h"
 #include "utility/utility.h"
@@ -42,6 +43,7 @@ class AnalysisManager {
   bool draw_one_node(
       const PBTree_Node& node, const uint32_t& parent_node_id,
       const std::string& parent_split_condition,
+      const std::vector<uint64_t>& record_vec,
       std::string* output_str, uint32_t* node_id);
 
   bool draw_one_tree(
@@ -56,11 +58,23 @@ class AnalysisManager {
     m_fam_ptr_ = fam_ptr;
   }
 
+  void set_feature_matrix_ptr(
+      std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> matrix_ptr) {
+    m_matrix_ptr_ = matrix_ptr;
+  }
+
+  void set_label_vec_ptr(
+      std::shared_ptr<std::vector<double>> label_vec_ptr) {
+    m_label_vec_ptr_ = label_vec_ptr;
+  }
+
  private:
   std::shared_ptr<FeatureAnalysisModelVec> m_fam_ptr_;
 //  std::shared_ptr<advertiser::demographyestimate::FeatureAnalysisModelVec> m_fam_ptr_;
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<std::map<uint64_t, std::string>> m_feature_map_ptr_;
+  std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
+  std::shared_ptr<std::vector<double>> m_label_vec_ptr_;
 };
 
 }  // pbtree

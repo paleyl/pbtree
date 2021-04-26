@@ -30,34 +30,9 @@ DEFINE_string(input_model_path, "", "");
 DEFINE_string(input_fam_path, "", "");
 DEFINE_string(input_test_data_path, "", "");
 DEFINE_string(running_mode, "train", "");
+DEFINE_string(distribution_type, "GAMMA_DISTRIBUTION", "");
 
 // what to do next, use forest and calculate mixture
-
-int blas_trial () {
-  using namespace boost::numeric::ublas;
-  compressed_matrix<double> m (3, 3, 3 * 3);
-  for (unsigned i = 0; i < m.size1 (); ++ i)
-      for (unsigned j = 0; j < m.size2 () - 1; ++ j)
-          m (i, j) = 3 * i + j;
-  VLOG(100) << m;
-  auto r1 = m.begin1();
-  VLOG(100) << "r1.index1 " << r1.index1() << " r1.index2 " << r1.index2();
-  VLOG(100) << *(r1.begin());
-  matrix_row<compressed_matrix<double>> ma = row(m, 2);
-  // VLOG(102) << "ma value size = " << ma.end() - ma.begin()
-  //           << "ma full size = " << ma.size();
-  // std::sort(ma.begin(), ma.end());
-  std::vector<double> vec;
-  for (unsigned i = 0; i < ma.size(); ++i) {
-    vec.push_back(ma[i]);
-  }
-  std::sort(vec.begin(), vec.end(), [](double a, double b) {return a < b;});
-  for (auto it = vec.begin(); it != vec.end(); ++it) {
-    VLOG(100) << *it;
-  }
-  //VLOG(100) << *(r1.begin());
-  return 0;
-}
 
 bool run_analysis() {
   pbtree::AnalysisManager analysis_manager;
@@ -140,8 +115,12 @@ bool run_train() {
 
   std::shared_ptr<std::vector<double>> label_vec_ptr =
       std::make_shared<std::vector<double>>(label_vec);
+  // auto descriptor = pbtree::PBTree_DistributionType_descriptor();
+  // auto tmp = descriptor->FindValueByName(FLAGS_distribution_type)->index();
+  pbtree::PBTree_DistributionType tmp_type;
+  pbtree::PBTree_DistributionType_Parse(FLAGS_distribution_type, &tmp_type);
   std::shared_ptr<pbtree::Distribution> distribution_ptr =
-      std::shared_ptr<pbtree::Distribution>(new pbtree::NormalDistribution());
+      pbtree::DistributionManager::get_distribution(tmp_type);
   pbtree::PBTree pbtree;
   pbtree::Tree tree;
   std::shared_ptr<pbtree::PBTree> pbtree_ptr = std::make_shared<pbtree::PBTree>(pbtree);

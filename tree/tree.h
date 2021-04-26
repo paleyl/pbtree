@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <tuple>
 
 #include "glog/logging.h"
 #include "gflags/gflags.h"
@@ -26,6 +27,8 @@ class Tree {
  public:
   bool build_tree();
 
+  bool init_pred_dist_vec();
+
   bool predict(
       const boost::numeric::ublas::matrix_row<
       boost::numeric::ublas::compressed_matrix<double>>& record,
@@ -35,6 +38,13 @@ class Tree {
       const boost::numeric::ublas::matrix_row<
       boost::numeric::ublas::compressed_matrix<double>>& record,
       const PBTree_Node& root, double* p1, double* p2, double* p3);
+
+  bool boost_update(const PBTree_Node& new_tree);
+
+  bool boost_update_one_instance(
+      const PBTree_Node& new_tree,
+      unsigned long record_index,
+      double* p1, double* p2, double* p3);
 
   bool create_node(const std::vector<uint64_t>& record_index_vec,
       const uint32_t& level,
@@ -79,6 +89,7 @@ class Tree {
   std::shared_ptr<std::vector
       <std::vector<std::pair<double, float>>>> m_histogram_vec_ptr_;
   std::shared_ptr<Distribution> m_distribution_ptr_;
+  std::shared_ptr<std::vector<std::tuple<double, double, double>>> m_pred_param_vec_ptr_;
 };
 }  // namespace pbtree
 

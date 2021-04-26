@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # set the project name and version
-project(Trial VERSION 1.0)
+project(PBTREE VERSION 1.0)
 
 # specify the C++ standard
 set(CMAKE_CXX_STANDARD 14)
@@ -33,13 +33,13 @@ list(APPEND EXTRA_LIBS utility)
 ## It seemed appeded later will be linked first, pb is depended by others so should be in the latest
 list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/proto/build/libtree_proto.a")
 
-add_executable(Trial trial.cxx)
+add_executable(pbtree pbtree.cxx)
 
-target_link_libraries(Trial PUBLIC -lpthread)
-target_link_libraries(Trial PUBLIC ${EXTRA_LIBS})
-target_link_libraries(Trial PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/protobuf/cmake/build/libprotobuf.a")
+target_link_libraries(pbtree PUBLIC -lpthread)
+target_link_libraries(pbtree PUBLIC ${EXTRA_LIBS})
+target_link_libraries(pbtree PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/protobuf/cmake/build/libprotobuf.a")
 
-target_include_directories(Trial PUBLIC
+target_include_directories(pbtree PUBLIC
                            "${PROJECT_BINARY_DIR}"
                            "${PROJECT_SOURCE_DIR}/proto/build"
                            ${CMAKE_CURRENT_SOURCE_DIR}

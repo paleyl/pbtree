@@ -2,16 +2,17 @@
 #include "distribution.h"
 
 DEFINE_uint32(distribution_sample_point_num, 100, "");
+DEFINE_double(regularization_param, 0.1, "");
 // DEFINE_int32(input_data_line_width, 4096, "");
 
 namespace pbtree {
 
-bool NormalDistribution::calculate_loss(
+bool Distribution::calc_sample_moment(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& row_index_vec,
-    double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
+    double* first_moment,
+    double* second_moment) {
   double mu = 0;
-  double sigma = 0;
   double square_sum = 0;
   // Compute mu and sigma
   for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
@@ -19,8 +20,29 @@ bool NormalDistribution::calculate_loss(
     square_sum += label_data[*iter] * label_data[*iter];
   }
   mu /= row_index_vec.size();
+  *first_moment = mu;
   // E(X^2) - (EX)^2
-  double variance = square_sum / row_index_vec.size() - mu * mu;
+  *second_moment = square_sum / row_index_vec.size() - mu * mu;
+  return true;
+}
+
+bool NormalDistribution::calculate_loss(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
+  double mu = 0;
+  double sigma = 0;
+  // double square_sum = 0;
+  // // Compute mu and sigma
+  // for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
+  //   mu += label_data[*iter];
+  //   square_sum += label_data[*iter] * label_data[*iter];
+  // }
+  // mu /= row_index_vec.size();
+  // E(X^2) - (EX)^2
+  // double variance = square_sum / row_index_vec.size() - mu * mu;
+  double variance = 0;
+  calc_sample_moment(label_data, row_index_vec, &mu, &variance);
   if (!Utility::check_double_le(0, variance)) {
     sigma = -1;
   } else if (Utility::check_double_equal(0, variance)) {
@@ -31,11 +53,14 @@ bool NormalDistribution::calculate_loss(
   // VLOG(102) << sigma;
   // Compute loss
   double tmp_loss = 0;
+  boost::math::normal_distribution<double> dist(mu, sigma);
   for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
-    tmp_loss += (mu - label_data[*iter]) * (mu - label_data[*iter]);
+    tmp_loss += log(boost::math::pdf(dist, label_data[*iter]));
   }
-  tmp_loss /= row_index_vec.size();
-  *loss = tmp_loss;
+  // for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
+  //   tmp_loss += (mu - label_data[*iter]) * (mu - label_data[*iter]);
+  // }
+  *loss = tmp_loss * -1 / row_index_vec.size();
   if (p1 != nullptr) *p1 = mu;
   if (p2 != nullptr) *p2 = sigma;
   return true;
@@ -89,6 +114,44 @@ bool NormalDistribution::plot_distribution_curve(
   return true;
 }
 
+bool NormalDistribution::calculate_moment(
+    const PBTree_Node& node,
+    double* first_moment,
+    double* second_moment) {
+  *first_moment = node.p1();
+  *second_moment = node.p2() * node.p2();
+  return true;
+}
+
+bool NormalDistribution::calculate_boost_loss(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    double* loss) {
+  double mean = 0;
+  double variance = 0;
+  calc_sample_moment(label_data, record_index_vec, &mean, &variance);
+  double mu_likelihood = mean;
+  double sigma_likelihood = sqrt(variance);
+
+  double tmp_loss = 0;
+  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+    auto param = predicted_param[*iter];
+    double mu_prior = std::get<0>(param);
+    double sigma_prior = std::get<1>(param);
+    // Refer to https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html
+    double mu_posterior = mu_prior * pow(sigma_likelihood, 2) +
+        mu_likelihood * pow(sigma_prior, 2);
+    double sigma_posterior = pow(sigma_likelihood, 2) * pow(sigma_prior, 2) /
+        (pow(sigma_likelihood, 2) + pow(sigma_prior, 2));
+    sigma_posterior = sqrt(sigma_posterior);
+    boost::math::gamma_distribution<double> dist_posterior(mu_posterior, sigma_posterior);
+    tmp_loss += log(boost::math::pdf(dist_posterior, label_data[*iter]));
+  }
+  *loss = tmp_loss * -1 / record_index_vec.size();
+  return true;
+}
+
 std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_DistributionType type) {
   std::shared_ptr<Distribution> distribution_ptr;
   switch (type)
@@ -110,6 +173,31 @@ bool GammaDistribution::calculate_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& row_index_vec,
     double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
+  double mu = 0;
+  // double sigma = 0;
+  double square_sum = 0;
+  // Compute mu and sigma
+  for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
+    mu += label_data[*iter];
+    square_sum += label_data[*iter] * label_data[*iter];
+  }
+  mu /= row_index_vec.size();
+  // E(X^2) - (EX)^2
+  double variance = square_sum / row_index_vec.size() - mu * mu;
+
+  // For gamma(k, theta), mean = k * theta, variance = k * theta ^ 2
+  // Therefore theta = variance / mean, k = mean / theta
+  double theta = variance / mu;
+  double k = mu / theta;
+  if (p1 != nullptr) *p1 = k;
+  if (p2 != nullptr) *p2 = theta;
+  boost::math::gamma_distribution<double> dist(k, theta);
+
+  double tmp_loss = 0;
+  for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
+    tmp_loss += log(boost::math::pdf(dist, label_data[*iter]));
+  }
+  *loss = tmp_loss * -1 / row_index_vec.size();
   return true;
 }
 
@@ -117,6 +205,25 @@ bool GammaDistribution::set_tree_node_param(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& row_index_vec,
     PBTree_Node* node) {
+  double mu = 0;
+  // double sigma = 0;
+  double square_sum = 0;
+  // Compute mu and sigma
+  for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
+    mu += label_data[*iter];
+    square_sum += label_data[*iter] * label_data[*iter];
+  }
+  mu /= row_index_vec.size();
+  // E(X^2) - (EX)^2
+  double variance = square_sum / row_index_vec.size() - mu * mu;
+
+  // For gamma(k, theta), mean = k * theta, variance = k * theta ^ 2
+  // Therefore theta = variance / mean, k = mean / theta
+  double theta = variance / mu;
+  double k = mu / theta;
+  node->set_p1(k);
+  node->set_p2(theta);
+  node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
   return true;
 }
 
@@ -124,7 +231,104 @@ bool GammaDistribution::plot_distribution_curve(
     const double& p1, const double& p2,
     const double& p3,
     std::string* output_str) {
+  boost::math::gamma_distribution<double> dist(p1, p2);
+  
+  const double lower_bound = 
+      p1 * p2 - 5 * sqrt(p1 * p2 * p2) > 0 ? p1 * p2 - 5 * sqrt(p1 * p2 * p2) : 0;
+  const double upper_bound = p1 * p2 + 5 * sqrt(p1 * p2 * p2);
+  const double step = (upper_bound - lower_bound) / FLAGS_distribution_sample_point_num;
+  std::stringstream ss;
+  for (unsigned int i = 0; i < FLAGS_distribution_sample_point_num; ++i) {
+    double x = i * step + lower_bound;
+    double y = boost::math::pdf(dist, x);
+    ss << x << " " << y << "\n";
+  }
+  *output_str = ss.str();
   return true;
 }
+
+bool GammaDistribution::calculate_moment(
+    const PBTree_Node& node,
+    double* first_moment,
+    double* second_moment) {
+  *first_moment = node.p1() * node.p2();
+  *second_moment = node.p1() * node.p2() * node.p2();
+  return true;
+}
+
+bool GammaDistribution::calculate_boost_gradient(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    double* g_p1, double* g_p2, double* g_p3) {
+  if (g_p1 == nullptr || g_p2 == nullptr) {
+    LOG(FATAL) << "Pointer for g_p1 or g_p2 is null";
+    return false;
+  }
+  double delta = 0.01;
+  double sum_gradient_k = 0;
+  double sum_gradient_theta = 0;
+  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+    auto param = predicted_param[*iter];
+    double k = std::get<0>(param);
+    double theta = std::get<1>(param);
+    boost::math::gamma_distribution<double> dist_sample(k, theta);
+    double p0 = boost::math::pdf(dist_sample, label_data[*iter]);
+    double p_k = boost::math::pdf(dist_sample, label_data[*iter] + delta);
+    sum_gradient_k += (log(p_k) - log(p0)) / delta;
+    double p_theta = boost::math::pdf(dist_sample, label_data[*iter] + delta);
+    sum_gradient_theta += (log(p_theta) - log(p0)) / delta;
+  }
+  double gradient_k = sum_gradient_k / FLAGS_regularization_param;
+  double gradient_theta = sum_gradient_theta / FLAGS_regularization_param;
+  if (g_p1 != nullptr) *g_p1 = gradient_k;
+  if (g_p2 != nullptr) *g_p2 = gradient_theta;
+  return true;
+}
+
+bool GammaDistribution::calculate_boost_loss(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    double* loss) {
+  double tmp_loss = 0;
+  double delta_k = 0, delta_theta = 0;
+  calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+    auto param = predicted_param[*iter];
+    double k = std::get<0>(param);
+    double theta = std::get<1>(param);
+    boost::math::gamma_distribution<double> dist_sample(k + delta_k, theta + delta_theta);
+    tmp_loss += log(boost::math::pdf(dist_sample, label_data[*iter]));
+  }
+  *loss = tmp_loss * -1 / record_index_vec.size();
+  return true;
+}
+
+// bool GammaDistribution::calculate_boost_loss(
+//     const std::vector<double>& label_data,
+//     const std::vector<uint64_t>& record_index_vec,
+//     const std::vector<std::tuple<double, double, double>>& predicted_param,
+//     double* loss) {
+//   double mean = 0;
+//   double variance = 0;
+//   calc_sample_moment(label_data, record_index_vec, &mean, &variance);
+//   double theta_likelihood = variance / mean;
+//   double k_likelihood = mean / theta_likelihood;
+//   double tmp_loss = 0;
+
+//   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+//     auto param = predicted_param[*iter];
+//     double k_prior = std::get<0>(param);
+//     double theta_prior = std::get<1>(param);
+//     // k = k1 + k2 - 1, theta = 1 / (1 / theta1 + 1 / theta2)
+//     double k_posterior = k_prior + k_likelihood - 1;
+//     double theta_posterior = 1.0 / ( 1 / theta_prior + 1 / theta_likelihood);
+//     boost::math::gamma_distribution<double> dist_posterior(k_posterior, theta_posterior);
+//     tmp_loss += log(boost::math::pdf(dist_posterior, label_data[*iter]));
+//   }
+//   *loss = tmp_loss * -1 / record_index_vec.size();
+//   return true;
+// }
 
 }  // pbtree

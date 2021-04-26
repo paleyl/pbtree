@@ -125,8 +125,15 @@ bool AnalysisManager::draw_one_node(
 
     std::string cmd_str;
     std::stringstream title_stream;
-    title_stream << "Level " << node.level() << " (" << std::fixed << std::setprecision(2)
-                  << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%)";
+    double mean;
+    double variance;
+
+    distribution_ptr->calculate_moment(node, &mean, &variance);
+    double std_deviation = sqrt(variance);
+    title_stream << "L" << node.level() << " (" << std::fixed << std::setprecision(2)
+                  << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%) mean="
+                  << std::fixed << std::setprecision(2) << mean
+                  << ",std=" << std::fixed << std::setprecision(2) << std_deviation;
     cmd_str = FLAGS_draw_script + " " + FLAGS_output_plot_directory + "/node_"
         + std::to_string(current_node_id) + "_plot.svg"
         + " " + curve_file_name + " " + hist_file_name

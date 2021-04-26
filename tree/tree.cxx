@@ -7,6 +7,19 @@ DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
 
 namespace pbtree {
 
+bool Tree::init_pred_dist_vec() {
+  std::vector<std::tuple<double, double, double>> pred_param_vec;
+  double p1 = 0, p2 = 0, p3 = 0;
+  m_distribution_ptr_->init_param(&p1, &p2, &p3);
+  auto init_param = std::make_tuple(p1, p2, p3);
+  for (unsigned int i = 0; i < m_label_data_ptr_->size(); ++i) {
+    pred_param_vec.push_back(init_param);
+  }
+  m_pred_param_vec_ptr_ =
+      std::make_shared<std::vector<std::tuple<double, double, double>>>(pred_param_vec);
+  return true;
+}
+
 bool Tree::predict_one_tree(
     const boost::numeric::ublas::matrix_row<
     boost::numeric::ublas::compressed_matrix<double>>& record,
@@ -44,6 +57,45 @@ bool Tree::predict(
     LOG(ERROR) << "Predict instance failed";
     return false;
   };
+  return true;
+}
+
+bool Tree::boost_update_one_instance(
+    const PBTree_Node& new_tree_node,
+    unsigned long record_index,
+    double* p1, double* p2, double* p3) {
+  if (!new_tree_node.has_left_child() && !new_tree_node.has_right_child()) {
+    *p1 += new_tree_node.p1();
+    *p2 += new_tree_node.p2();
+    return true;
+  }
+  double split_feature_value = new_tree_node.split_feature_value();
+  double split_feature_index = new_tree_node.split_feature_index();
+  if (Utility::check_double_le(
+      (*m_matrix_ptr_)(split_feature_index, record_index), split_feature_value)) {
+    VLOG(202) << "Go into left child " << new_tree_node.level();
+    boost_update_one_instance(new_tree_node.left_child(), record_index, p1, p2, p3);
+  } else {
+    VLOG(202) << "Go into right child " << new_tree_node.level();
+    boost_update_one_instance(new_tree_node.right_child(), record_index, p1, p2, p3);
+  }
+  return true;
+}
+
+bool Tree::boost_update(const PBTree_Node& new_tree) {
+  std::vector<std::tuple<double, double, double>> updated_param_vec;
+  
+  for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
+    auto param = (*m_pred_param_vec_ptr_)[i];
+    double p1 = std::get<0>(param);
+    double p2 = std::get<1>(param);
+    double p3 = std::get<2>(param);
+    boost_update_one_instance(new_tree, i, &p1, &p2, &p3);
+    updated_param_vec.push_back(std::make_tuple(p1, p2, p3));
+  }
+  m_pred_param_vec_ptr_ =
+      std::make_shared<std::vector<
+          std::tuple<double, double, double>>>(updated_param_vec);
   return true;
 }
 

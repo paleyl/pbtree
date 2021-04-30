@@ -4,6 +4,8 @@ DEFINE_uint32(histogram_bin_count, 100, "Number of bins in histogram");
 DEFINE_uint32(split_min_count, 5, "Minimum record count for split");
 DEFINE_double(split_min_ratio, 0.02, "Minimum record count for split");
 DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
+DEFINE_bool(boosting_mode, true, "");
+DEFINE_uint32(training_round, 10, "");
 
 namespace pbtree {
 
@@ -24,13 +26,15 @@ bool Tree::predict_one_tree(
     const boost::numeric::ublas::matrix_row<
     boost::numeric::ublas::compressed_matrix<double>>& record,
     const PBTree_Node& root, double* p1, double* p2, double* p3) {
-  if (!(root.has_left_child() && root.left_child().has_level()) ||
+  if (!(root.has_left_child() && root.left_child().has_level()) &&
       !(root.has_right_child() && root.right_child().has_level())) {
     *p1 = root.p1();
     *p2 = root.p2();
     VLOG(202) << "At level " << root.level() << " " << *p1 << " " << *p2;
     return true;
   }
+  // We assume every node is binary tree
+  CHECK(root.has_left_child() && root.has_right_child());
   double split_feature_value = root.split_feature_value();
   double split_feature_index = root.split_feature_index();
   if (Utility::check_double_le(
@@ -60,6 +64,26 @@ bool Tree::predict(
   return true;
 }
 
+bool Tree::boost_predict_data_set(
+  const boost::numeric::ublas::compressed_matrix<double>& matrix,
+  std::vector<std::tuple<double, double, double>>* pred_param_vec,
+  std::vector<std::tuple<double, double>>* pred_moment_vec) {
+  auto dist = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
+  for (unsigned long i = 0; i < matrix.size2(); ++i) {  // Assumed column major
+    double p1 = 0, p2 = 0, p3 = 0;
+    for (int j = 0; j < m_pbtree_ptr_->tree_size(); ++j) {
+      dist->init_param(&p1, &p2, &p3);
+      boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &p1, &p2, &p3);
+    }
+    auto pred_param = std::make_tuple(p1, p2, p3);
+    double first_moment = 0, second_moment = 0;
+    dist->param_to_moment(pred_param, &first_moment, &second_moment);
+    pred_param_vec->push_back(pred_param);
+    pred_moment_vec->push_back(std::make_tuple(first_moment, second_moment));
+  }
+  return true;
+}
+
 bool Tree::boost_update_one_instance(
     const PBTree_Node& new_tree_node,
     unsigned long record_index,
@@ -69,6 +93,7 @@ bool Tree::boost_update_one_instance(
     *p2 += new_tree_node.p2();
     return true;
   }
+  CHECK(new_tree_node.has_left_child() && new_tree_node.has_right_child());
   double split_feature_value = new_tree_node.split_feature_value();
   double split_feature_index = new_tree_node.split_feature_index();
   if (Utility::check_double_le(
@@ -106,27 +131,33 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
       level > FLAGS_tree_max_depth) {
     node->Clear();
     return false;
-  };
+  }
+  node->set_level(level);
   LOG(INFO) << "Building node on level " << level;
+  LOG(INFO) << "Record vec size = " << record_index_vec.size();
+  if (FLAGS_boosting_mode) {
+    m_distribution_ptr_->set_boost_node_param(
+        *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, node);
+  } else {
+    m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
+  }
   uint64_t split_feature_index = 0;
   double split_point = 0;
   double split_loss = 0;
-  find_all_feature_split(
+  bool split_ret = find_all_feature_split(
       record_index_vec, &split_feature_index, &split_point, &split_loss);
-  node->set_level(level);
+  if (!split_ret) {
+    LOG(INFO) << "Level " << level << " find split feature failed!";
+    return true;
+  }
   node->set_split_feature_index(split_feature_index);
   node->set_split_feature_value(split_point);
   LOG(INFO) << "Level " << level << " split_feature_index = " << split_feature_index
             << " split_point = " << split_point;
-  m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
   // std::shared_ptr<PBTree_Node> left_child_ptr =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
   // std::shared_ptr<PBTree_Node> right_child_ptr =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
-  PBTree_Node* left_child = new PBTree_Node();
-  PBTree_Node* right_child = new PBTree_Node();
-  node->set_allocated_left_child(left_child);
-  node->set_allocated_right_child(right_child);
   std::vector<uint64_t> left_index_vec;
   std::vector<uint64_t> right_index_vec;
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
@@ -137,6 +168,18 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
       right_index_vec.push_back(*iter);
     }
   }
+  if (left_index_vec.size() < FLAGS_split_min_count ||
+      right_index_vec.size() < FLAGS_split_min_count) {
+    LOG(INFO) << "Level " << level << " split failed "
+              << ", left_index_vec.size() = " << left_index_vec.size()
+              << ", right_index_vec.size() = " << right_index_vec.size()
+              << ", less than min_split_count" << FLAGS_split_min_count;
+    return true;
+  }
+  PBTree_Node* left_child = new PBTree_Node();
+  PBTree_Node* right_child = new PBTree_Node();
+  node->set_allocated_left_child(left_child);
+  node->set_allocated_right_child(right_child);
   uint32_t next_level = level + 1;
   if (!create_node(left_index_vec, next_level, left_child)) {
     node->clear_left_child();
@@ -153,7 +196,7 @@ bool Tree::find_all_feature_split(
     const std::vector<uint64_t>& record_index_vec,
     uint64_t* split_feature_index, double* split_point,
     double* split_loss) {
-  if (record_index_vec.size() <= FLAGS_split_min_count) {
+  if (record_index_vec.size() < FLAGS_split_min_count) {
     return false;
   }
   std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
@@ -183,15 +226,18 @@ bool Tree::find_one_feature_split(
   const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
   std::vector<std::pair<double, double>> candidate_split_vec;
   if (histogram.empty()) {
-    VLOG(102) << "Col index " << feature_index << " empty histogram";
+    VLOG(202) << "Feature index " << feature_index << " empty histogram";
     return false;
   }
   if (histogram.size() == 1) {
     *split_point = 0;
     *split_loss = DBL_MAX;
+    VLOG(201) << "Feature index histogram size is 1";
     return false;
   }
   if (histogram[0].second > 1 - FLAGS_split_min_ratio) {
+    VLOG(101) << "Feature index " << feature_index << " zero ratio "
+              << histogram[0].second << " > " << FLAGS_split_min_ratio;
     return true;
   }
   // double total_loss = 0;
@@ -211,12 +257,21 @@ bool Tree::find_one_feature_split(
     }
     if (left_index_vec.size() < FLAGS_split_min_count ||
         right_index_vec.size() < FLAGS_split_min_count) {
+      LOG(INFO) << "Feature index " << feature_index
+                << " not suitable for split_min_count " << FLAGS_split_min_count 
+                << ", left count = " << left_index_vec.size()
+                << ", right count = " << right_index_vec.size();
       return false;
     }
     double left_loss = 0;
-    m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, left_index_vec, &left_loss);
     double right_loss = 0;
-    m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, right_index_vec, &right_loss);
+    if (FLAGS_boosting_mode) {
+      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_param_vec_ptr_, &left_loss);
+      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_param_vec_ptr_, &right_loss);
+    } else {
+      m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, left_index_vec, &left_loss);
+      m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, right_index_vec, &right_loss);
+    }
 
     double total_loss = left_index_vec.size() * left_loss + right_index_vec.size() * right_loss;
     VLOG(101) << "Feature index: " << feature_index << " split point = " << histogram_iter->first
@@ -242,25 +297,25 @@ bool Tree::build_histogram(
     const boost::numeric::ublas::compressed_matrix<double>::iterator1& feature_iter,
     std::vector<std::pair<double, float>>* histogram) {
   using namespace boost::numeric::ublas;
-  VLOG(103) << "Begin building column";
+  VLOG(203) << "Begin building column";
   // matrix_column<compressed_matrix<double>> col = column(*matrix_ptr, feature_index);
-  VLOG(103) << "Begin count non zero value";
+  VLOG(203) << "Begin count non zero value";
   // auto col_iter = matrix_ptr->begin2();
   // col_iter = col_iter + feature_index;
   uint64_t non_zero_count = 0;
   for (auto iter = feature_iter.begin(); iter != feature_iter.end(); ++iter) {
     ++non_zero_count;
   }
-  VLOG(103) << "Begin push non zero value";
+  VLOG(203) << "Begin push non zero value";
   std::vector<double> vec;
   for (auto iter = feature_iter.begin(); iter != feature_iter.end(); ++iter) {
     vec.push_back(*iter);
   }
-  VLOG(103) << "Feature index " << feature_index
+  VLOG(203) << "Feature index " << feature_index
              << " non zero count = " << non_zero_count;
   if (vec.size() * 1.0 / matrix_ptr->size2() < FLAGS_split_min_ratio) {
     histogram->push_back(std::make_pair(0.0, 1.0));
-    VLOG(103) << "Non zero value too less";
+    VLOG(203) << "Non zero value too less";
     return true;
   }
 
@@ -317,13 +372,23 @@ bool Tree::build_tree() {
   LOG(INFO) << "Finished building histogram";
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
-  PBTree_Node* root = m_pbtree_ptr_->add_tree();
+
   std::vector<uint64_t> feature_index_vec;
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
     feature_index_vec.push_back(i);
   }
-  create_node(feature_index_vec, 0, root);
 
+  for (unsigned int i = 0; i < FLAGS_training_round; ++i) {
+    PBTree_Node* root = m_pbtree_ptr_->add_tree();
+    create_node(feature_index_vec, 0/*node level*/, root);
+    if (FLAGS_boosting_mode) {
+      boost_update(*root);
+      double loss = 0;
+      m_distribution_ptr_->calculate_boost_loss(
+          *m_label_data_ptr_, feature_index_vec, *m_pred_param_vec_ptr_, &loss, true);
+      LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss;
+    }
+  }
   return true;
 }
 

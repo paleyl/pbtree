@@ -51,18 +51,29 @@ class Distribution {
       const std::vector<uint64_t>& row_index_vec,
       double* first_moment,
       double* second_moment);
+  
+  virtual bool param_to_moment(
+      std::tuple<double, double, double>& param,
+      double* first_moment, double* second_moment) = 0;
 
   virtual bool calculate_boost_loss(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
-      double* loss) = 0;
+      double* loss,
+      const bool& evaluation = false) = 0;
 
   virtual bool calculate_boost_gradient(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
       double* g_p1, double* g_p2, double* g_p3) = 0;
+
+  virtual bool set_boost_node_param(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    PBTree_Node* node) = 0;
 
   virtual bool init_param(double* p1, double* p2, double* p3) = 0;
 };
@@ -96,6 +107,10 @@ class NormalDistribution : public Distribution {
       double* first_moment,
       double* second_moment);
 
+  bool param_to_moment(
+      std::tuple<double, double, double>& param,
+      double* first_moment, double* second_moment);
+
   bool init_param(double* p1, double* p2, double* p3) {
     *p1 = 0.0;  // mu
     *p2 = 1.0;  // sigma
@@ -106,13 +121,23 @@ class NormalDistribution : public Distribution {
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
-      double* loss);
+      double* loss,
+      const bool& evaluation = false);
 
   virtual bool calculate_boost_gradient(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
       double* g_p1, double* g_p2, double* g_p3);
+
+  bool set_boost_node_param(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    PBTree_Node* node) {
+    LOG(FATAL) << "Not implemented yet";
+    return true;
+  }
 
   void print_version() {
     VLOG(202) << "Normal distribution";
@@ -143,9 +168,13 @@ class GammaDistribution : public Distribution {
       double* first_moment,
       double* second_moment);
 
+  bool param_to_moment(
+      std::tuple<double, double, double>& param,
+      double* first_moment, double* second_moment);
+
   bool init_param(double* p1, double* p2, double* p3) {
-    *p1 = 1.0;  // k
-    *p2 = 1e8;  // theta
+    *p1 = 2.0;  // k
+    *p2 = 2.0;  // theta
     return true;
   }
 
@@ -153,13 +182,20 @@ class GammaDistribution : public Distribution {
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
-      double* loss);
+      double* loss,
+      const bool& evaluation = false);
 
   virtual bool calculate_boost_gradient(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
       double* g_p1, double* g_p2, double* g_p3);
+
+  bool set_boost_node_param(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& row_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    PBTree_Node* node);
 
   void print_version() {
     VLOG(202) << "Gamma distribution";

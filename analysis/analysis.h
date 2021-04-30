@@ -44,6 +44,7 @@ class AnalysisManager {
       const PBTree_Node& node, const uint32_t& parent_node_id,
       const std::string& parent_split_condition,
       const std::vector<uint64_t>& record_vec,
+      const uint32_t& tree_index,
       std::string* output_str, uint32_t* node_id);
 
   bool draw_one_tree(
@@ -67,6 +68,8 @@ class AnalysisManager {
       std::shared_ptr<std::vector<double>> label_vec_ptr) {
     m_label_vec_ptr_ = label_vec_ptr;
   }
+  
+  bool init_pred_dist_vec();
 
  private:
   std::shared_ptr<FeatureAnalysisModelVec> m_fam_ptr_;
@@ -75,6 +78,7 @@ class AnalysisManager {
   std::shared_ptr<std::map<uint64_t, std::string>> m_feature_map_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
   std::shared_ptr<std::vector<double>> m_label_vec_ptr_;
+  std::shared_ptr<std::vector<std::tuple<double, double, double>>> m_pred_param_vec_ptr_;
 };
 
 }  // pbtree

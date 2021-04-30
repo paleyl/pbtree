@@ -38,6 +38,11 @@ class Tree {
       const boost::numeric::ublas::matrix_row<
       boost::numeric::ublas::compressed_matrix<double>>& record,
       const PBTree_Node& root, double* p1, double* p2, double* p3);
+  
+  bool boost_predict_data_set(
+      const boost::numeric::ublas::compressed_matrix<double>& matrix,
+      std::vector<std::tuple<double, double, double>>* predicted_vec,
+      std::vector<std::tuple<double, double>>* pred_moment_vec);
 
   bool boost_update(const PBTree_Node& new_tree);
 

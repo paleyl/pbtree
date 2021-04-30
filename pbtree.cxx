@@ -56,6 +56,53 @@ bool run_analysis() {
   return true;
 }
 
+bool run_boost_predict() {
+  std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> feature_matrix_ptr;
+  pbtree::DataManager data_manager;
+  std::vector<double> label_data_vec;
+  if (!data_manager.read_train_data(
+      FLAGS_input_test_data_path, (uint32_t)1, &label_data_vec, &feature_matrix_ptr)) {
+    LOG(ERROR) << "Read test data failed";
+    return false;
+  }
+  FILE* fp = fopen(FLAGS_input_model_path.data(), "r");
+  if (fp == nullptr) {
+    LOG(ERROR) << "Open input model file failed";
+    return false;
+  }
+  fseek(fp, 0, SEEK_END);
+  uint64_t file_size = ftell(fp);
+  rewind(fp);
+  std::vector<char> buffer(file_size + 10);
+  if (!fread(buffer.data(), sizeof(char), file_size, fp)) {
+    LOG(ERROR) << "Read data failed";
+    return false;
+  }
+  fclose(fp);
+  std::shared_ptr<pbtree::PBTree> pbtree_ptr = std::shared_ptr<pbtree::PBTree>(new pbtree::PBTree());
+  if (!pbtree_ptr->ParseFromArray(buffer.data(), file_size)) {
+    LOG(ERROR) << "Parse string failed";
+    return false;
+  }
+  LOG(INFO) << pbtree_ptr->DebugString();
+  pbtree::Tree tree;
+  tree.set_matrix_ptr(feature_matrix_ptr);
+  tree.set_pbtree(pbtree_ptr);
+  std::vector<std::tuple<double, double, double>> pred_param_vec;
+  std::vector<std::tuple<double, double>> pred_moment_vec;
+  tree.boost_predict_data_set(*feature_matrix_ptr, &pred_param_vec, &pred_moment_vec);
+  CHECK_EQ(pred_param_vec.size(), label_data_vec.size());
+  CHECK_EQ(pred_moment_vec.size(), label_data_vec.size());
+  for (unsigned long i = 0; i < pred_param_vec.size(); ++i) {
+    LOG(INFO) << i << "-th instance: " << label_data_vec[i] << " (" 
+              << std::get<0>(pred_moment_vec[i]) << ","
+              << std::get<1>(pred_moment_vec[i]) << "), ("
+              << std::get<0>(pred_param_vec[i]) << ","
+              << std::get<1>(pred_param_vec[i]) << ")";
+  }
+  return true;
+}
+
 bool run_test() {
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> feature_matrix_ptr;
   pbtree::DataManager data_manager;
@@ -77,6 +124,7 @@ bool run_test() {
     LOG(ERROR) << "Read data failed";
     return false;
   }
+  fclose(fp);
   std::shared_ptr<pbtree::PBTree> pbtree_ptr = std::shared_ptr<pbtree::PBTree>(new pbtree::PBTree());
   if (!pbtree_ptr->ParseFromArray(buffer.data(), file_size)) {
     LOG(ERROR) << "Parse string failed";
@@ -128,6 +176,7 @@ bool run_train() {
   tree.set_pbtree(pbtree_ptr);
   tree.set_distribution_ptr(distribution_ptr);
   tree.set_label_data_ptr(label_vec_ptr);
+  tree.init_pred_dist_vec();
   tree.build_tree();
   LOG(INFO) << pbtree_ptr->DebugString();
   std::string model_output_str;
@@ -148,6 +197,8 @@ int main (int argc, char** argv) {
     run_test();
   } else if (FLAGS_running_mode == "analysis") {
     run_analysis();
+  } else if (FLAGS_running_mode == "boost_predict") {
+    run_boost_predict();
   }
   return 0;
 }

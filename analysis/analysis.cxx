@@ -1,13 +1,29 @@
 #include <iomanip>
 #include "analysis.h"
+#include "tree/tree.h"
 
 DEFINE_string(output_dot_file, "tmp_file.dot", "");
 DEFINE_string(output_plot_directory, "plot", "");
 DEFINE_string(draw_script, "python3", "");
 DEFINE_int32(analysis_tree_depth, 4, "");
 DEFINE_bool(plot_image, true, "");
+DECLARE_bool(boosting_mode);
 
 namespace pbtree {
+
+bool AnalysisManager::init_pred_dist_vec() {
+  std::vector<std::tuple<double, double, double>> pred_param_vec;
+  double p1 = 0, p2 = 0, p3 = 0;
+  auto dist = DistributionManager::get_distribution((*m_pbtree_ptr_).tree(0).distribution_type());
+  dist->init_param(&p1, &p2, &p3);
+  auto init_param = std::make_tuple(p1, p2, p3);
+  for (unsigned int i = 0; i < m_label_vec_ptr_->size(); ++i) {
+    pred_param_vec.push_back(init_param);
+  }
+  m_pred_param_vec_ptr_ =
+      std::make_shared<std::vector<std::tuple<double, double, double>>>(pred_param_vec);
+  return true;
+}
 
 bool AnalysisManager::analysis_tree_model() {
   std::map<uint64_t, std::string> feature_name_map;
@@ -56,6 +72,7 @@ bool AnalysisManager::draw_one_node(
     const PBTree_Node& node, const uint32_t& parent_node_id,
     const std::string& parent_split_condition,
     const std::vector<uint64_t>& record_vec,
+    const uint32_t& tree_index,
     std::string* output_str, uint32_t* node_id) {
   if (node.level() > FLAGS_analysis_tree_depth) {
     return true;
@@ -63,8 +80,8 @@ bool AnalysisManager::draw_one_node(
   uint32_t current_node_id = *node_id;
   if (current_node_id != 0) {
     *output_str = *output_str
-        + "node_" + std::to_string(parent_node_id)
-        + " -> node_" + std::to_string(current_node_id)
+        + "tree_" + std::to_string(tree_index) + "_node_" + std::to_string(parent_node_id)
+        + " -> " + "tree_" + std::to_string(tree_index) + "_node_" + std::to_string(current_node_id)
         + "[penwidth=0.3 color=\"#444443\" label=\""
         + parent_split_condition
         + "\"] ;\n";
@@ -101,7 +118,7 @@ bool AnalysisManager::draw_one_node(
 
     // Write hist_file
     std::ofstream hist_file;
-    std::string hist_file_name = FLAGS_output_plot_directory + "/node_"
+    std::string hist_file_name = FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_hist_file.txt";
     hist_file.open(hist_file_name);
     hist_file << "y\n";
@@ -114,9 +131,13 @@ bool AnalysisManager::draw_one_node(
     std::shared_ptr<pbtree::Distribution> distribution_ptr =
         DistributionManager::get_distribution(node.distribution_type());
     std::string curve_str;
-    distribution_ptr->plot_distribution_curve(node.p1(), node.p2(), node.p3(), &curve_str);
+    double p1 = 0, p2 = 0, p3 = 0;
+    if (FLAGS_boosting_mode) {
+      distribution_ptr->init_param(&p1, &p2, &p3);
+    }
+    distribution_ptr->plot_distribution_curve(node.p1() + p1, node.p2() + p2, node.p3() + p3, &curve_str);
     std::ofstream curve_file;
-    std::string curve_file_name = FLAGS_output_plot_directory + "/node_"
+    std::string curve_file_name = FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_curve_file.txt";
     curve_file.open(curve_file_name);
     curve_file << "x y\n";
@@ -134,7 +155,7 @@ bool AnalysisManager::draw_one_node(
                   << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%) mean="
                   << std::fixed << std::setprecision(2) << mean
                   << ",std=" << std::fixed << std::setprecision(2) << std_deviation;
-    cmd_str = FLAGS_draw_script + " " + FLAGS_output_plot_directory + "/node_"
+    cmd_str = FLAGS_draw_script + " " + FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_plot.svg"
         + " " + curve_file_name + " " + hist_file_name
         + " \"" + title_stream.str() + "\"";
@@ -143,14 +164,14 @@ bool AnalysisManager::draw_one_node(
     
     // Write dot file
     *output_str = *output_str
-        + "node_" + std::to_string(current_node_id)
+        + "tree_" + std::to_string(tree_index) + "_node_" + std::to_string(current_node_id)
         + " [margin=\"0\" shape=none label=<<table border=\"0\"><tr><td><img src=\""
-        + FLAGS_output_plot_directory + "/node_"
+        + FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_plot.svg"
         + "\"/></td></tr></table>>] ;\n";
   } else {
     *output_str = *output_str
-        + "node_" + std::to_string(current_node_id)
+        + "tree_" + std::to_string(tree_index) + "_node_" + std::to_string(current_node_id)
         + " [label=\""
         + parent_split_condition + "\n"
         + distribution_ss.str()
@@ -161,13 +182,13 @@ bool AnalysisManager::draw_one_node(
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << node.split_feature_value();
     draw_one_node(node.left_child(), current_node_id,
-    feature_name + "<=" + stream.str(), left_record_vec, output_str, node_id);
+    feature_name + "<=" + stream.str(), left_record_vec, tree_index, output_str, node_id);
   }
   if (node.has_right_child()) {
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << node.split_feature_value();
     draw_one_node(node.right_child(), current_node_id,
-    feature_name + ">" + stream.str(), right_record_vec, output_str, node_id);
+    feature_name + ">" + stream.str(), right_record_vec, tree_index, output_str, node_id);
   }
   return true;
 }
@@ -179,7 +200,7 @@ bool AnalysisManager::draw_one_tree(
       + "subgraph tree\n"
       + "{\n"
       + "label=\"tree_" + std::to_string(tree_index) + "\"\n"
-      + "node_0 ;\n"
+      + "tree_" + std::to_string(tree_index) + "_node_0 ;\n"
   ;
 
   //  root first dfs
@@ -188,7 +209,7 @@ bool AnalysisManager::draw_one_tree(
   for (uint64_t i = 0; i < m_matrix_ptr_->size2(); ++i) {
     record_vec.push_back(i);
   }
-  draw_one_node(node, 0, "root", record_vec, output_str, &node_id);
+  draw_one_node(node, 0, "root", record_vec, tree_index, output_str, &node_id);
   *output_str = *output_str 
       + "}\n";
   return true;
@@ -209,7 +230,7 @@ bool AnalysisManager::plot_tree_model() {
 
   std::string output_str;
   for (int i = 0; i < m_pbtree_ptr_->tree_size(); ++i) {
-    draw_one_tree(m_pbtree_ptr_->tree(0), i, &output_str);
+    draw_one_tree(m_pbtree_ptr_->tree(i), i, &output_str);
   }
   dot_file << output_str;
   dot_file << "}\n";

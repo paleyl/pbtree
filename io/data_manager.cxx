@@ -13,6 +13,15 @@ std::string instance_to_str(const instance_t& instance) {
   return str;
 }
 
+/**
+ * @brief  
+ * @note   
+ * @param  data_path: Input data path.
+ * @param  major_type: 0 for row_major, 1 for column_major.
+ * @param  label_vec: Pointer to label vector, input nullptr if the dataset has no label.
+ * @param  matrix: Pointer to smart pointer of feature matrix.
+ * @retval 
+ */
 bool DataManager::read_train_data(
     const std::string& data_path, const uint32_t& major_type,
     std::vector<double>* label_vec,

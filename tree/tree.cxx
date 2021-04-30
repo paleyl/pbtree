@@ -7,6 +7,7 @@ DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
 DEFINE_bool(boosting_mode, true, "");
 DEFINE_uint32(training_round, 10, "");
 
+// TODO(paleylv): develop pthread strategy
 namespace pbtree {
 
 bool Tree::init_pred_dist_vec() {
@@ -71,9 +72,10 @@ bool Tree::boost_predict_data_set(
   auto dist = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
   for (unsigned long i = 0; i < matrix.size2(); ++i) {  // Assumed column major
     double p1 = 0, p2 = 0, p3 = 0;
+    dist->init_param(&p1, &p2, &p3);
     for (int j = 0; j < m_pbtree_ptr_->tree_size(); ++j) {
-      dist->init_param(&p1, &p2, &p3);
       boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &p1, &p2, &p3);
+      VLOG(102) << "Round " << j << " param: (" << p1 << "," << p2 << ")";
     }
     auto pred_param = std::make_tuple(p1, p2, p3);
     double first_moment = 0, second_moment = 0;

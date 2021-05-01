@@ -77,7 +77,9 @@ bool Tree::boost_predict_data_set(
       boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &p1, &p2, &p3);
       VLOG(102) << "Round " << j << " param: (" << p1 << "," << p2 << ")";
     }
-    auto pred_param = std::make_tuple(p1, p2, p3);
+    double raw_param_p1 = 0, raw_param_p2 = 0;
+    dist->transform_param(p1, p2, p3, &raw_param_p1, &raw_param_p2, nullptr);
+    auto pred_param = std::make_tuple(raw_param_p1, raw_param_p2, 0.0);
     double first_moment = 0, second_moment = 0;
     dist->param_to_moment(pred_param, &first_moment, &second_moment);
     pred_param_vec->push_back(pred_param);

@@ -19,6 +19,8 @@
 #include "Tree.pb.h"
 #include "utility/utility.h"
 
+// TODO(paleylv): Maybe we need to add hessian into loss.
+
 namespace pbtree {
 class Distribution {
  public:
@@ -74,6 +76,25 @@ class Distribution {
     const std::vector<uint64_t>& row_index_vec,
     const std::vector<std::tuple<double, double, double>>& predicted_param,
     PBTree_Node* node) = 0;
+
+  virtual bool transform_param(
+      const double& raw_p1, const double& raw_p2, const double& raw_p3,
+      double* p1, double* p2, double* p3) {
+    *p1 = raw_p1;
+    *p2 = raw_p2;
+    if (p3) *p3 = raw_p3;
+    return true;
+  }
+
+//   virtual bool evaluate_rmse(
+//       const std::vector<double>& label_data,
+//       const std::vector<uint64_t>& record_index_vec,
+//       const std::vector<std::tuple<double, double, double>>& predicted_param) = 0;
+
+//   virtual bool evaluate_rmsle(
+//       const std::vector<double>& label_data,
+//       const std::vector<uint64_t>& record_index_vec,
+//       const std::vector<std::tuple<double, double, double>>& predicted_param) = 0;
 
   virtual bool init_param(double* p1, double* p2, double* p3) = 0;
 };
@@ -131,11 +152,18 @@ class NormalDistribution : public Distribution {
       double* g_p1, double* g_p2, double* g_p3);
 
   bool set_boost_node_param(
-    const std::vector<double>& label_data,
-    const std::vector<uint64_t>& row_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
-    PBTree_Node* node) {
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& row_index_vec,
+      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      PBTree_Node* node) {
     LOG(FATAL) << "Not implemented yet";
+    return true;
+  }
+
+  bool evaluate_rmse(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::tuple<double, double, double>>& predicted_param) {
     return true;
   }
 
@@ -173,8 +201,8 @@ class GammaDistribution : public Distribution {
       double* first_moment, double* second_moment);
 
   bool init_param(double* p1, double* p2, double* p3) {
-    *p1 = 2.0;  // k
-    *p2 = 2.0;  // theta
+    *p1 = 0.5;  // log_k
+    *p2 = 1.0;  // log_theta
     return true;
   }
 
@@ -196,6 +224,14 @@ class GammaDistribution : public Distribution {
     const std::vector<uint64_t>& row_index_vec,
     const std::vector<std::tuple<double, double, double>>& predicted_param,
     PBTree_Node* node);
+
+  bool transform_param(
+      const double& raw_p1, const double& raw_p2, const double& raw_p3,
+      double* p1, double* p2, double* p3) {
+    *p1 = exp(raw_p1);
+    *p2 = exp(raw_p2);
+    return true;
+  }
 
   void print_version() {
     VLOG(202) << "Gamma distribution";

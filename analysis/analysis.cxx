@@ -155,10 +155,15 @@ bool AnalysisManager::draw_one_node(
                   << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%) mean="
                   << std::fixed << std::setprecision(2) << mean
                   << ",std=" << std::fixed << std::setprecision(2) << std_deviation;
+    std::stringstream param_title_stream;
+    param_title_stream << "L" << node.level() << " (" << std::fixed << std::setprecision(2)
+                  << record_vec.size() * 100.0 / m_label_vec_ptr_->size() << "%) p1="
+                  << std::fixed << std::setprecision(2) << node.p1()
+                  << ",p2=" << std::fixed << std::setprecision(2) << node.p2();
     cmd_str = FLAGS_draw_script + " " + FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_plot.svg"
         + " " + curve_file_name + " " + hist_file_name
-        + " \"" + title_stream.str() + "\"";
+        + " \"" + param_title_stream.str() + "\"";
     LOG(INFO) << cmd_str;
     system(cmd_str.data());
     
@@ -219,13 +224,17 @@ bool AnalysisManager::plot_tree_model() {
   if (m_feature_map_ptr_.get() == nullptr && !analysis_tree_model()) {
     return false;
   }
+  std::string mkdir_str = "mkdir -p " + FLAGS_output_plot_directory;
+  system(mkdir_str.data());
   // DFS to write dot file
-  std::ofstream dot_file; 
-  dot_file.open(FLAGS_output_dot_file);
+  std::ofstream dot_file;
+  std::string dot_file_str = FLAGS_output_plot_directory + "/" + FLAGS_output_dot_file;
+  dot_file.open(dot_file_str.data());
   dot_file << 
   "digraph \"\"\n"
   "{\n"
-  "label=\"pbtree model\"\n"
+  "rankdir=\"TD\";\n"
+  "label=\"pbtree model\";\n"
   ;
 
   std::string output_str;
@@ -235,6 +244,8 @@ bool AnalysisManager::plot_tree_model() {
   dot_file << output_str;
   dot_file << "}\n";
   dot_file.close();
+  std::string cmd_str = "dot -Tpng " + dot_file_str + " > " + dot_file_str + ".png";
+  system(cmd_str.data());
   return true;
 }
 

@@ -286,6 +286,49 @@ bool GammaDistribution::param_to_moment(
   return true;
 }
 
+
+bool calculate_boost_log_gradient(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    double* g_p1, double* g_p2, double* g_p3) {
+  if (g_p1 == nullptr || g_p2 == nullptr) {
+    LOG(FATAL) << "Pointer for g_p1 or g_p2 is null";
+    return false;
+  }
+  double sum_gradient_k = 0;
+  double sum_gradient_theta = 0;
+  /*
+   * Implementation of formula solution
+   * 
+   * log(Gamma(y | k, theta)) = (k - 1) log(y) - y / theta - log(gamma(k)) - k * log(theta)
+   * gradient_k = d log(Gamma(y | k, theta)) / d k = log(y / theta) - digamma(k)
+   * gradient_gamma = d log(Gamma(y | k, theta)) / d theta = y / (theta^2) - k / theta
+   * gradient_log_k = d log(Gamma(y | k, theta)) / d log_k = (log(y / theta) - digamma(k)) * e^log_k
+   * gradient_log_gamma = d log(Gamma(y | k, theta)) / d log_theta = (y / (theta^2) - k / theta) * e^log_theta
+   */
+
+  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+    auto param = predicted_param[*iter];
+    double log_k = std::get<0>(param);
+    double log_theta = std::get<1>(param);
+
+    double k = exp(log_k);
+    double theta = exp(log_theta);
+
+    double y = label_data[*iter];
+    double gradient_log_k = (log(y / theta) - boost::math::digamma(k)) * k;
+    double gradient_log_theta = (y / pow(theta, 2) - k / theta) * theta;
+    sum_gradient_k += gradient_log_k;
+    sum_gradient_theta += gradient_log_theta;
+  }
+  double gradient_k = sum_gradient_k * FLAGS_regularization_param;
+  double gradient_theta = sum_gradient_theta * FLAGS_regularization_param;
+  if (g_p1 != nullptr) *g_p1 = gradient_k / record_index_vec.size();
+  if (g_p2 != nullptr) *g_p2 = gradient_theta / record_index_vec.size();
+  return true;
+}
+
 bool GammaDistribution::calculate_boost_gradient(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
@@ -304,6 +347,8 @@ bool GammaDistribution::calculate_boost_gradient(
    * log(Gamma(y | k, theta)) = (k - 1) log(y) - y / theta - log(gamma(k)) - k * log(theta)
    * gradient_k = d log(Gamma(y | k, theta)) / d k = log(y / theta) - digamma(k)
    * gradient_gamma = d log(Gamma(y | k, theta)) / d theta = y / (theta^2) - k / theta
+   * gradient_log_k = d log(Gamma(y | k, theta)) / d log_k = (log(y / theta) - digamma(k)) * e^log_k
+   * gradient_log_gamma = d log(Gamma(y | k, theta)) / d log_theta = (y / (theta^2) - k / theta) * e^log_theta
    */
 
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
@@ -324,8 +369,8 @@ bool GammaDistribution::calculate_boost_gradient(
     // double p_theta = boost::math::pdf(dist_delta_theta, label_data[*iter] + delta);
     // sum_gradient_theta += log(p_theta / p0) / delta;
   }
-  double gradient_k = sum_gradient_k / FLAGS_regularization_param;
-  double gradient_theta = sum_gradient_theta / FLAGS_regularization_param;
+  double gradient_k = sum_gradient_k * FLAGS_regularization_param;
+  double gradient_theta = sum_gradient_theta * FLAGS_regularization_param;
   if (g_p1 != nullptr) *g_p1 = gradient_k / record_index_vec.size();
   if (g_p2 != nullptr) *g_p2 = gradient_theta / record_index_vec.size();
   return true;
@@ -340,8 +385,13 @@ bool GammaDistribution::calculate_boost_loss(
   double tmp_loss = 0;
   double delta_k = 0, delta_theta = 0;
   if (!evaluation) {
-    calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+    calculate_boost_log_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
   }
+  if (std::isnan(delta_k) || std::isnan(delta_theta)) {
+    LOG(WARNING) << "Delta_k " << delta_k << " delta_theta " << delta_theta;
+  }
+  if (std::isnan(delta_k)) delta_k = 0;
+  if (std::isnan(delta_theta)) delta_theta = 0;
   LOG(INFO) << "Evaluation = " << evaluation << " Gradient delta_k = "
             << delta_k << ", gradient delta_theta = " << delta_theta;
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
@@ -350,10 +400,19 @@ bool GammaDistribution::calculate_boost_loss(
     double theta = std::get<1>(param);
     double new_k = k + delta_k;
     double new_theta = theta + delta_theta;
-    if (Utility::check_double_le(new_k, 0)) new_k = 1e-3;
-    if (Utility::check_double_le(new_theta, 0)) new_theta = 1e-3;
-    boost::math::gamma_distribution<double> dist_sample(new_k, new_theta);
-    tmp_loss += log(boost::math::pdf(dist_sample, label_data[*iter]));
+    double raw_k = exp(new_k);
+    double raw_theta = exp(new_theta);
+    // if (Utility::check_double_le(new_k, 0) || std::isnan(new_k)) new_k = 1e-3;
+    // if (Utility::check_double_le(new_theta, 0) || std::isnan(new_theta)) new_theta = 1e-3;
+    boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
+    double prob = boost::math::pdf(dist_sample, label_data[*iter]);
+    double log_loss = log(prob);
+    if (std::isinf(prob) || std::isinf(log_loss)) {
+      LOG(WARNING) << "Raw_k = " << raw_k << ", raw_theta = " << raw_theta
+                   << ", label = " << label_data[*iter]
+                   << ", prob = " << prob << ", log_loss = " << log_loss;
+    }
+    tmp_loss += log_loss;
   }
   *loss = tmp_loss * -1 / record_index_vec.size();
   return true;
@@ -365,7 +424,7 @@ bool GammaDistribution::set_boost_node_param(
     const std::vector<std::tuple<double, double, double>>& predicted_param,
     PBTree_Node* node) {
   double delta_k = 0, delta_theta = 0;
-  calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+  calculate_boost_log_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
   // if (Utility::check_double_le(delta_k, 0)) delta_k = 1e-3;
   // if (Utility::check_double_le(delta_theta, 0)) delta_theta = 1e-3;
   node->set_p1(delta_k);

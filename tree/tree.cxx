@@ -6,8 +6,10 @@ DEFINE_double(split_min_ratio, 0.02, "Minimum record count for split");
 DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
 DEFINE_bool(boosting_mode, true, "");
 DEFINE_uint32(training_round, 10, "");
+DEFINE_double(split_gain_min_ratio, 0.01, "");
 
 // TODO(paleylv): develop pthread strategy
+// TODO(paleylv): add min gain ratio threshold
 namespace pbtree {
 
 bool Tree::init_pred_dist_vec() {
@@ -139,11 +141,18 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   node->set_level(level);
   LOG(INFO) << "Building node on level " << level;
   LOG(INFO) << "Record vec size = " << record_index_vec.size();
+  double current_loss = 0;
   if (FLAGS_boosting_mode) {
     m_distribution_ptr_->set_boost_node_param(
         *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, node);
+    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &current_loss, true);
   } else {
     m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
+    m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, record_index_vec, &current_loss);
+  }
+  if (Utility::check_double_le(current_loss, 0)) {
+    LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
+    return true;
   }
   uint64_t split_feature_index = 0;
   double split_point = 0;
@@ -152,6 +161,18 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
       record_index_vec, &split_feature_index, &split_point, &split_loss);
   if (!split_ret) {
     LOG(INFO) << "Level " << level << " find split feature failed!";
+    return true;
+  }
+  CHECK(!std::isnan(current_loss));
+  CHECK(!std::isnan(split_loss));
+  LOG(INFO) << "Level " << level << " split loss = " << split_loss
+            << ", current_loss = " << current_loss;
+  if (!std::isinf(current_loss) && !std::isinf(split_loss) &&
+      // !std::isnan(current_loss) && !std::isnan(split_loss) &&
+      split_loss / current_loss - 1 > -1 * FLAGS_split_gain_min_ratio) {
+    LOG(INFO) << "Level " << level << " split loss = " << split_loss
+              << ", current_loss = " << current_loss
+              << ", does not satisfy split_gain > " << FLAGS_split_gain_min_ratio;
     return true;
   }
   node->set_split_feature_index(split_feature_index);
@@ -192,7 +213,6 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   if (!create_node(right_index_vec, next_level, right_child)) {
     node->clear_right_child();
   }
-  // if ()
   return true;
 }
 
@@ -278,6 +298,7 @@ bool Tree::find_one_feature_split(
     }
 
     double total_loss = left_index_vec.size() * left_loss + right_index_vec.size() * right_loss;
+    total_loss /= record_index_vec.size();
     VLOG(101) << "Feature index: " << feature_index << " split point = " << histogram_iter->first
               << " left_index_vec.size() = " << left_index_vec.size()
               << " left_loss = " << left_loss

@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_C_COMPILER g++)
 set(CMAKE_CXX_COMPILER g++)
 SET(CMAKE_CXX_FLAGS "-g -Wall -Werror")
+SET(CMAKE_EXE_LINKER_FLAGS "-static-libgcc  -static-libstdc++")
 
 list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/gflags/build/lib/libgflags.a")
 list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/glog/build/libglog.a")

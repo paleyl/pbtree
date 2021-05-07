@@ -104,7 +104,7 @@ bool NormalDistribution::calculate_moment(
 }
 
 bool NormalDistribution::param_to_moment(
-    std::tuple<double, double, double>& param,
+    const std::tuple<double, double, double>& param,
     double* first_moment, double* second_moment) {
   double mu = std::get<0>(param);
   double sigma = std::get<1>(param);
@@ -151,5 +151,14 @@ bool NormalDistribution::calculate_boost_loss(
   *loss = tmp_loss * -1 / record_index_vec.size();
   return true;
 }
+
+// bool NormalDistribution::evaluate_rmsle(
+//     const std::vector<double>& label_data,
+//     const std::vector<uint64_t>& record_index_vec,
+//     const std::vector<std::tuple<double, double, double>>& predicted_param,
+//     double* rmsle) {
+//   LOG(FATAL) << "Not implemented yet";
+//   return true;
+// }
 
 }  // namespace pbtree

@@ -29,7 +29,7 @@ class GammaDistribution : public Distribution {
       double* second_moment);
 
   bool param_to_moment(
-      std::tuple<double, double, double>& param,
+      const std::tuple<double, double, double>& param,
       double* first_moment, double* second_moment);
 
   bool init_param(double* p1, double* p2, double* p3) {
@@ -65,11 +65,17 @@ class GammaDistribution : public Distribution {
     return true;
   }
 
+  // bool evaluate_rmsle(
+  //     const std::vector<double>& label_data,
+  //     const std::vector<uint64_t>& record_index_vec,
+  //     const std::vector<std::tuple<double, double, double>>& predicted_paramm,
+  //     double* rmsle);
+
   void print_version() {
     VLOG(202) << "Gamma distribution";
   }
 };
 
-}  // pbtree
+}  // namespace pbtree
 
 #endif  // DISTRIBUTION_GAMMA_DISTRIBUTION_H_

@@ -94,7 +94,7 @@ bool GammaDistribution::calculate_moment(
 }
 
 bool GammaDistribution::param_to_moment(
-    std::tuple<double, double, double>& param,
+    const std::tuple<double, double, double>& param,
     double* first_moment, double* second_moment) {
   double k = std::get<0>(param);
   double theta = std::get<1>(param);
@@ -225,7 +225,7 @@ bool GammaDistribution::calculate_boost_loss(
   double tmp_loss = 0;
   double delta_k = 0, delta_theta = 0;
   if (!evaluation) {
-    calculate_boost_log_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+    calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
   }
   if (std::isnan(delta_k) || std::isnan(delta_theta)) {
     LOG(WARNING) << "Delta_k " << delta_k << " delta_theta " << delta_theta;
@@ -267,7 +267,7 @@ bool GammaDistribution::set_boost_node_param(
     const std::vector<std::tuple<double, double, double>>& predicted_param,
     PBTree_Node* node) {
   double delta_k = 0, delta_theta = 0;
-  calculate_boost_log_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+  calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
   // if (Utility::check_double_le(delta_k, 0)) delta_k = 1e-3;
   // if (Utility::check_double_le(delta_theta, 0)) delta_theta = 1e-3;
   node->set_p1(delta_k);
@@ -276,4 +276,19 @@ bool GammaDistribution::set_boost_node_param(
   return true;
 }
 
-}  // pbtree
+// bool GammaDistribution::evaluate_rmsle(
+//     const std::vector<double>& label_data,
+//     const std::vector<uint64_t>& record_index_vec,
+//     const std::vector<std::tuple<double, double, double>>& predicted_param,
+//     double* rmsle) {
+//   for (int i = 0; i < record_index_vec.size(); ++i)  {
+//     uint64_t record_index = record_index_vec[i];
+//     double first_moment = 0, second_moment = 0;
+//     param_to_moment(predicted_param[record_index], &first_moment, &second_moment);
+//     *rmsle += pow(log((label_data[record_index] + 1) / (first_moment + 1)), 2);
+//   }
+//   *rmsle = sqrt(*rmsle / record_index_vec.size());
+//   return true;
+// }
+
+}  // namespace pbtree

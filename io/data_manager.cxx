@@ -22,6 +22,14 @@ std::string instance_to_str(const instance_t& instance) {
  * @param  matrix: Pointer to smart pointer of feature matrix.
  * @retval 
  */
+
+bool build_instance_batch(
+    std::vector<std::pair<std::pair<uint64_t, uint64_t>, double>>& tmp_data_vec,
+    uint32_t batch_index
+    ) {
+  return true;
+}
+
 bool DataManager::read_train_data(
     const std::string& data_path, const uint32_t& major_type,
     std::vector<double>* label_vec,
@@ -52,6 +60,9 @@ bool DataManager::read_train_data(
     }
     std::vector<std::string> tmp_pair;
     for (uint64_t i = stating_point; i < tmp_fields.size(); ++i) {
+      if (tmp_fields[i].empty()) {
+        continue;
+      }
       pbtree::Utility::split_string(tmp_fields[i], ":", &tmp_pair);
       uint64_t tmp_index = std::stol(tmp_pair[0]);
       double tmp_value = std::stod(tmp_pair[1]);
@@ -68,7 +79,7 @@ bool DataManager::read_train_data(
             << " is: " << instance_to_str(data[data.size() / 2]);
 
   std::vector<std::pair<std::pair<uint64_t, uint64_t>, double>> tmp_data_vec;
-
+  tmp_data_vec.reserve(feature_val_num);
   for (unsigned long i = 0; i < data.size(); ++i) {
     for (unsigned int j = 0; j < (data)[i].second.size(); ++j) {
       uint64_t feature_index = (data)[i].second[j].first;
@@ -77,6 +88,7 @@ bool DataManager::read_train_data(
       tmp_data_vec.push_back(std::make_pair(std::make_pair(i, feature_index), val));
     }
   }
+  VLOG(101) << "Tmp data size = " << tmp_data_vec.size();
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> mat_ptr;
   if (major_type == 1) {
     boost::numeric::ublas::compressed_matrix<double>
@@ -105,7 +117,13 @@ bool DataManager::read_train_data(
         const std::pair<std::pair<uint64_t, uint64_t>, double>& b){
           return a.first.second < b.first.second;  // sort by column index
         });
+    for (auto iter = tmp_data_vec.begin(); iter != tmp_data_vec.begin() + 1000; ++iter) {
+      VLOG(101) << iter->first.second << " " << iter->first.first << " " << iter->second;
+    }
     for (auto iter = tmp_data_vec.begin(); iter != tmp_data_vec.end(); ++iter) {
+      if ((iter - tmp_data_vec.begin()) % 100000 == 0) {
+        VLOG(101) << "Built " << iter - tmp_data_vec.begin() << " elements";
+      }
       (*mat_ptr)(iter->first.second, iter->first.first) = iter->second;
     }
   }

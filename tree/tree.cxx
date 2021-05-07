@@ -513,7 +513,10 @@ bool Tree::build_tree() {
       double loss = 0;
       m_distribution_ptr_->calculate_boost_loss(
           *m_label_data_ptr_, feature_index_vec, *m_pred_param_vec_ptr_, &loss, true);
-      LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss;
+      double rmsle = 0;
+      m_distribution_ptr_->evaluate_rmsle(
+          *m_label_data_ptr_, feature_index_vec, *m_pred_param_vec_ptr_, &rmsle);
+      LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss << ", rmsle = " << rmsle;
     }
   }
   return true;

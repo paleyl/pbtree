@@ -55,7 +55,7 @@ class Distribution {
       double* second_moment);
   
   virtual bool param_to_moment(
-      std::tuple<double, double, double>& param,
+      const std::tuple<double, double, double>& param,
       double* first_moment, double* second_moment) = 0;
 
   virtual bool calculate_boost_loss(
@@ -91,10 +91,11 @@ class Distribution {
 //       const std::vector<uint64_t>& record_index_vec,
 //       const std::vector<std::tuple<double, double, double>>& predicted_param) = 0;
 
-//   virtual bool evaluate_rmsle(
-//       const std::vector<double>& label_data,
-//       const std::vector<uint64_t>& record_index_vec,
-//       const std::vector<std::tuple<double, double, double>>& predicted_param) = 0;
+  bool evaluate_rmsle(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      double* rmsle);
 
   virtual bool init_param(double* p1, double* p2, double* p3) = 0;
 };

@@ -1,3 +1,7 @@
+#include <sys/sysinfo.h>
+
+#include <chrono> 
+
 #include "tree.h"
 
 DEFINE_uint32(histogram_bin_count, 100, "Number of bins in histogram");
@@ -7,16 +11,28 @@ DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
 DEFINE_bool(boosting_mode, true, "");
 DEFINE_uint32(training_round, 10, "");
 DEFINE_double(split_gain_min_ratio, 0.01, "");
+DEFINE_uint32(thread_num, 8, "");
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
 namespace pbtree {
+
+bool Tree::init() {
+  unsigned int num_cpu_cores = get_nprocs_conf();
+  int thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
+      num_cpu_cores * 2 / 3 : FLAGS_thread_num;
+  m_thread_pool_ptr_ = std::shared_ptr<ThreadPool>(
+      new ThreadPool(thread_num));
+  init_pred_dist_vec();
+  return true;
+}
 
 bool Tree::init_pred_dist_vec() {
   std::vector<std::tuple<double, double, double>> pred_param_vec;
   double p1 = 0, p2 = 0, p3 = 0;
   m_distribution_ptr_->init_param(&p1, &p2, &p3);
   auto init_param = std::make_tuple(p1, p2, p3);
+  pred_param_vec.reserve(m_label_data_ptr_->size());
   for (unsigned int i = 0; i < m_label_data_ptr_->size(); ++i) {
     pred_param_vec.push_back(init_param);
   }
@@ -115,7 +131,7 @@ bool Tree::boost_update_one_instance(
 
 bool Tree::boost_update(const PBTree_Node& new_tree) {
   std::vector<std::tuple<double, double, double>> updated_param_vec;
-  
+  updated_param_vec.reserve(m_matrix_ptr_->size2());
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
     auto param = (*m_pred_param_vec_ptr_)[i];
     double p1 = std::get<0>(param);
@@ -184,7 +200,9 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   // std::shared_ptr<PBTree_Node> right_child_ptr =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
   std::vector<uint64_t> left_index_vec;
+  left_index_vec.reserve(record_index_vec.size());
   std::vector<uint64_t> right_index_vec;
+  right_index_vec.reserve(record_index_vec.size());
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
     if (Utility::check_double_le(
         (*m_matrix_ptr_)(split_feature_index, *iter), split_point)) {
@@ -198,7 +216,7 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     LOG(INFO) << "Level " << level << " split failed "
               << ", left_index_vec.size() = " << left_index_vec.size()
               << ", right_index_vec.size() = " << right_index_vec.size()
-              << ", less than min_split_count" << FLAGS_split_min_count;
+              << ", less than min_split_count " << FLAGS_split_min_count;
     return true;
   }
   PBTree_Node* left_child = new PBTree_Node();
@@ -224,23 +242,81 @@ bool Tree::find_all_feature_split(
     return false;
   }
   std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
-  for (unsigned long col_index = 0; col_index < m_matrix_ptr_->size1(); ++col_index) {
-    double tmp_split_point = 0, tmp_split_loss = 0;
-    if (find_one_feature_split(record_index_vec, col_index, &tmp_split_point, &tmp_split_loss))
-      candidate_split_vec.push_back(
-          std::make_pair(col_index, std::make_pair(tmp_split_point, tmp_split_loss)));
+  candidate_split_vec.reserve(m_valid_split_feature_vec_ptr_->size());
+  if (FLAGS_thread_num <= 1) {
+    // for (unsigned long col_index = 0; col_index < m_matrix_ptr_->size1(); ++col_index) {
+    for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
+      double tmp_split_point = 0, tmp_split_loss = DBL_MAX;
+      uint64_t feature_index = *iter;
+      if (find_one_feature_split(record_index_vec, feature_index, &tmp_split_point, &tmp_split_loss))
+        candidate_split_vec.push_back(
+            std::make_pair(feature_index, std::make_pair(tmp_split_point, tmp_split_loss)));
+    }
+  } else {
+    std::vector<std::pair<uint64_t, std::pair<double, double>>> tmp_candidate_split_vec;
+    for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
+      uint64_t feature_index = *iter;
+      tmp_candidate_split_vec.push_back(
+        std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX)));
+    }
+    for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
+      uint64_t feature_index = *iter;
+      uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
+      // TODO(paleylv): judge the histogram before finding split,
+      // Find split cost 100ms, push job to thread cost 0.1ms, which is very expensive for sparse feature
+      m_thread_pool_ptr_->do_job(std::bind(
+          &Tree::find_one_feature_split, this, record_index_vec, feature_index,
+          &(tmp_candidate_split_vec[candidate_index].second.first),
+          &(tmp_candidate_split_vec[candidate_index].second.second)));
+    }
+    while (!m_thread_pool_ptr_->is_jobs_queue_empty()
+           || m_thread_pool_ptr_->is_working()
+    ) {
+      usleep(1000);
+      // std::this_thread::sleep_for(std::chrono::seconds(1));
+      // std::cout << "Queue size = " << m_thread_pool_ptr_->get_jobs_queue_size() << std::endl;
+      // std::cout << m_thread_pool_ptr_->get_worker_status() << std::endl;
+      // Loop and waiting
+    }
+    for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
+      uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
+      if (!std::isinf(tmp_candidate_split_vec[candidate_index].second.first))
+        candidate_split_vec.push_back(tmp_candidate_split_vec[candidate_index]);
+    }
   }
   if (candidate_split_vec.size() <= 0) {
     return false;
   }
+  
   std::sort(candidate_split_vec.begin(), candidate_split_vec.end(),
       [](std::pair<uint64_t, std::pair<double, double>>& a,
       std::pair<uint64_t, std::pair<double, double>>& b){
-      return a.second.second < b.second.second;  // minimize the loss
+      return (a.second.second < b.second.second);  // minimize the loss
       });
+  for (auto iter = candidate_split_vec.begin(); iter != candidate_split_vec.end(); ++iter) {
+    LOG(INFO) << "After sorting " << iter->first << "," << iter->second.first << "," << iter->second.second;
+  }
   *split_feature_index = candidate_split_vec[0].first;
   *split_point = candidate_split_vec[0].second.first;
   *split_loss = candidate_split_vec[0].second.second;
+  return true;
+}
+
+bool Tree::check_split_histogram(const uint64_t& feature_index) {
+  const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
+  if (histogram.empty()) {
+    VLOG(202) << "Feature index " << feature_index << " empty histogram";
+    return false;
+  }
+  if (histogram.size() == 1) {
+    VLOG(201) << "Feature index histogram size is 1";
+    return false;
+  }
+  if (histogram[0].second > 1 - FLAGS_split_min_ratio) {
+    VLOG(101) << "Feature index " << feature_index << " zero ratio "
+              << histogram[0].second << " > " << FLAGS_split_min_ratio;
+    return false;
+  }
   return true;
 }
 
@@ -249,28 +325,50 @@ bool Tree::find_one_feature_split(
     double* split_point, double* split_loss) {
   const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
   std::vector<std::pair<double, double>> candidate_split_vec;
-  if (histogram.empty()) {
-    VLOG(202) << "Feature index " << feature_index << " empty histogram";
-    return false;
-  }
-  if (histogram.size() == 1) {
-    *split_point = 0;
-    *split_loss = DBL_MAX;
-    VLOG(201) << "Feature index histogram size is 1";
-    return false;
-  }
-  if (histogram[0].second > 1 - FLAGS_split_min_ratio) {
-    VLOG(101) << "Feature index " << feature_index << " zero ratio "
-              << histogram[0].second << " > " << FLAGS_split_min_ratio;
-    return true;
-  }
+  // if (histogram.empty()) {
+  //   VLOG(202) << "Feature index " << feature_index << " empty histogram";
+  //   return false;
+  // }
+  // if (histogram.size() == 1) {
+  //   *split_point = 0;
+  //   *split_loss = DBL_MAX;
+  //   VLOG(201) << "Feature index histogram size is 1";
+  //   return false;
+  // }
+  // if (histogram[0].second > 1 - FLAGS_split_min_ratio) {
+  //   VLOG(101) << "Feature index " << feature_index << " zero ratio "
+  //             << histogram[0].second << " > " << FLAGS_split_min_ratio;
+  //   return true;
+  // }
+  // if (!check_split_histogram(feature_index)) {
+  //   VLOG(102) << "Feature index " << feature_index << " can not build node.";
+  //   return false;
+  // }
   // double total_loss = 0;
   // m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, row_index_vec, &total_loss);
   for (auto histogram_iter = histogram.begin();
       histogram_iter != histogram.end() - 1; ++histogram_iter) {
 
+    uint64_t left_count = 0;
+    for (auto row_iter = record_index_vec.begin(); row_iter != record_index_vec.end(); ++row_iter) {
+      if (Utility::check_double_le((*m_matrix_ptr_)(feature_index, *row_iter), histogram_iter->first)) {
+        ++left_count;
+      }
+    }
+    uint64_t right_count = record_index_vec.size() - left_count;
+    if (left_count < FLAGS_split_min_count ||
+        right_count < FLAGS_split_min_count) {
+      LOG(INFO) << "Feature index " << feature_index
+                << " not suitable for split_min_count " << FLAGS_split_min_count 
+                << ", left count = " << left_count
+                << ", right count = " << record_index_vec.size() - left_count;
+      continue;
+    }
     std::vector<uint64_t> left_index_vec;
+    left_index_vec.reserve(left_count);
     std::vector<uint64_t> right_index_vec;
+    right_index_vec.reserve(right_count);
+
     for (auto row_iter = record_index_vec.begin(); row_iter != record_index_vec.end(); ++row_iter) {
       if (Utility::check_double_le((*m_matrix_ptr_)(feature_index, *row_iter), histogram_iter->first)) {
         // left_label_vec.push_back((*m_label_data_ptr_)[*row_iter]);
@@ -278,14 +376,6 @@ bool Tree::find_one_feature_split(
       } else {
         right_index_vec.push_back(*row_iter);
       }
-    }
-    if (left_index_vec.size() < FLAGS_split_min_count ||
-        right_index_vec.size() < FLAGS_split_min_count) {
-      LOG(INFO) << "Feature index " << feature_index
-                << " not suitable for split_min_count " << FLAGS_split_min_count 
-                << ", left count = " << left_index_vec.size()
-                << ", right count = " << right_index_vec.size();
-      return false;
     }
     double left_loss = 0;
     double right_loss = 0;
@@ -305,6 +395,10 @@ bool Tree::find_one_feature_split(
               << " right_index_vec.size() = " << right_index_vec.size()
               << " right_loss = " << right_loss;
     candidate_split_vec.push_back(std::make_pair(histogram_iter->first, total_loss));
+  }
+  if (candidate_split_vec.empty()) {
+    VLOG(101) << "Feature index: " << feature_index << " candidate empty.";
+    return false;
   }
   std::sort(candidate_split_vec.begin(), candidate_split_vec.end(),
       [](std::pair<double, double> a, std::pair<double, double> b)
@@ -389,12 +483,20 @@ bool Tree::build_tree() {
   }
   for (auto iter1 = histogram_vec_ptr->begin(); iter1 != histogram_vec_ptr->end(); ++iter1) {
     for (auto iter2 = iter1->begin(); iter2 != iter1->end(); ++iter2) {
-      VLOG(202) << iter1 - histogram_vec_ptr->begin() << "," << iter2 - iter1->begin() << ":"
+      VLOG(103) << iter1 - histogram_vec_ptr->begin() << "," << iter2 - iter1->begin() << ":"
                 << iter2->first << " " << iter2->second;
     }
   }
   m_histogram_vec_ptr_ = histogram_vec_ptr;
   LOG(INFO) << "Finished building histogram";
+
+  std::vector<uint64_t> valid_split_feature_vec;
+  for (unsigned long feature_index = 0; feature_index < m_matrix_ptr_->size1(); ++feature_index) {
+    if (check_split_histogram(feature_index)) {
+      valid_split_feature_vec.push_back(feature_index);
+    }
+  }
+  m_valid_split_feature_vec_ptr_ = std::make_shared<std::vector<uint64_t>>(valid_split_feature_vec);
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
 

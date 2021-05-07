@@ -176,7 +176,8 @@ bool run_train() {
   tree.set_pbtree(pbtree_ptr);
   tree.set_distribution_ptr(distribution_ptr);
   tree.set_label_data_ptr(label_vec_ptr);
-  tree.init_pred_dist_vec();
+  tree.init();
+  // tree.init_pred_dist_vec();
   tree.build_tree();
   LOG(INFO) << pbtree_ptr->DebugString();
   std::string model_output_str;

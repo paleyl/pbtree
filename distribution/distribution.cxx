@@ -3,6 +3,7 @@
 
 DEFINE_uint32(distribution_sample_point_num, 100, "");
 DEFINE_double(regularization_param, 0.1, "");
+DEFINE_double(min_prob, 1e-100, "");
 // DEFINE_int32(input_data_line_width, 4096, "");
 
 namespace pbtree {
@@ -406,6 +407,9 @@ bool GammaDistribution::calculate_boost_loss(
     // if (Utility::check_double_le(new_theta, 0) || std::isnan(new_theta)) new_theta = 1e-3;
     boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
     double prob = boost::math::pdf(dist_sample, label_data[*iter]);
+    if (prob < FLAGS_min_prob) {
+      prob = FLAGS_min_prob;
+    }
     double log_loss = log(prob);
     if (std::isinf(prob) || std::isinf(log_loss)) {
       LOG(WARNING) << "Raw_k = " << raw_k << ", raw_theta = " << raw_theta

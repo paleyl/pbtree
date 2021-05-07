@@ -20,12 +20,15 @@
 #include "distribution/distribution.h"
 #include "utility/utility.h"
 #include "Tree.pb.h"
+#include "thread_pool.h"
 
 namespace pbtree {
 
 class Tree {
  public:
   bool build_tree();
+
+  bool init();
 
   bool init_pred_dist_vec();
 
@@ -87,6 +90,8 @@ class Tree {
     m_distribution_ptr_ = distribution_ptr;
   }
 
+  bool check_split_histogram(const uint64_t& feature_index);
+
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
@@ -95,6 +100,8 @@ class Tree {
       <std::vector<std::pair<double, float>>>> m_histogram_vec_ptr_;
   std::shared_ptr<Distribution> m_distribution_ptr_;
   std::shared_ptr<std::vector<std::tuple<double, double, double>>> m_pred_param_vec_ptr_;
+  std::shared_ptr<ThreadPool> m_thread_pool_ptr_;
+  std::shared_ptr<std::vector<uint64_t>> m_valid_split_feature_vec_ptr_;
 };
 }  // namespace pbtree
 

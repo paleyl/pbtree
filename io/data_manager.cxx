@@ -101,7 +101,8 @@ bool DataManager::read_train_data(
     mat_ptr =
         std::make_shared<boost::numeric::ublas::compressed_matrix<double>>(mat);  
   }
-
+  
+  uint64_t record_cnt = data.size();
   if (major_type == 0) {  // row_major
     std::sort(tmp_data_vec.begin(), tmp_data_vec.end(),
         [](const std::pair<std::pair<uint64_t, uint64_t>, double>& a,
@@ -113,9 +114,9 @@ bool DataManager::read_train_data(
     }
   } else if (major_type == 1) {  // column_major
     std::sort(tmp_data_vec.begin(), tmp_data_vec.end(),
-        [](const std::pair<std::pair<uint64_t, uint64_t>, double>& a,
+        [&](const std::pair<std::pair<uint64_t, uint64_t>, double>& a,
         const std::pair<std::pair<uint64_t, uint64_t>, double>& b){
-          return a.first.second < b.first.second;  // sort by column index
+          return a.first.second * record_cnt + a.first.first < b.first.second * record_cnt + b.first.first;  // sort by column index
         });
     for (auto iter = tmp_data_vec.begin(); iter != tmp_data_vec.begin() + 1000; ++iter) {
       VLOG(101) << iter->first.second << " " << iter->first.first << " " << iter->second;

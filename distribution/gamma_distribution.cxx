@@ -99,6 +99,7 @@ bool GammaDistribution::param_to_moment(
   double k = std::get<0>(param);
   double theta = std::get<1>(param);
   *first_moment = k * theta;
+  // if (k > 1) *first_moment = (k - 1) * theta;
   *second_moment = k * theta * theta;
   return true;
 }

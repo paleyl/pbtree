@@ -262,7 +262,6 @@ bool Tree::find_all_feature_split(
     for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
       uint64_t feature_index = *iter;
       uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
-      // TODO(paleylv): judge the histogram before finding split,
       // Find split cost 100ms, push job to thread cost 0.1ms, which is very expensive for sparse feature
       m_thread_pool_ptr_->do_job(std::bind(
           &Tree::find_one_feature_split, this, record_index_vec, feature_index,
@@ -272,7 +271,7 @@ bool Tree::find_all_feature_split(
     while (!m_thread_pool_ptr_->is_jobs_queue_empty()
            || m_thread_pool_ptr_->is_working()
     ) {
-      usleep(1000);
+      // usleep(1000);
       // std::this_thread::sleep_for(std::chrono::seconds(1));
       // std::cout << "Queue size = " << m_thread_pool_ptr_->get_jobs_queue_size() << std::endl;
       // std::cout << m_thread_pool_ptr_->get_worker_status() << std::endl;
@@ -358,7 +357,7 @@ bool Tree::find_one_feature_split(
     uint64_t right_count = record_index_vec.size() - left_count;
     if (left_count < FLAGS_split_min_count ||
         right_count < FLAGS_split_min_count) {
-      LOG(INFO) << "Feature index " << feature_index
+      VLOG(101) << "Feature index " << feature_index
                 << " not suitable for split_min_count " << FLAGS_split_min_count 
                 << ", left count = " << left_count
                 << ", right count = " << record_index_vec.size() - left_count;
@@ -496,7 +495,26 @@ bool Tree::build_tree() {
       valid_split_feature_vec.push_back(feature_index);
     }
   }
+
+  for (auto iter1 = histogram_vec_ptr->begin();
+      (iter1 != histogram_vec_ptr->begin() + 500) && iter1 != histogram_vec_ptr->end(); ++iter1) {
+    for (auto iter2 = iter1->begin(); iter2 != iter1->end(); ++iter2) {
+      LOG(INFO) << iter1 - histogram_vec_ptr->begin() << "," << iter2 - iter1->begin() << ":"
+                << iter2->first << " " << iter2->second;
+    }
+  }
+
+  for (auto iter1 = histogram_vec_ptr->begin(); iter1 != histogram_vec_ptr->end(); ++iter1) {
+    if (check_split_histogram(iter1 - histogram_vec_ptr->begin())) {
+      for (auto iter2 = iter1->begin(); iter2 != iter1->end(); ++iter2) {
+        LOG(INFO) << iter1 - histogram_vec_ptr->begin() << "," << iter2 - iter1->begin() << ":"
+                  << iter2->first << " " << iter2->second;
+      }
+    }
+  }
+
   m_valid_split_feature_vec_ptr_ = std::make_shared<std::vector<uint64_t>>(valid_split_feature_vec);
+  LOG(INFO) << "Valid feature index size is " << m_valid_split_feature_vec_ptr_->size();
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
 

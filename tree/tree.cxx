@@ -248,7 +248,7 @@ bool Tree::find_all_feature_split(
     for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
       double tmp_split_point = 0, tmp_split_loss = DBL_MAX;
       uint64_t feature_index = *iter;
-      if (find_one_feature_split(record_index_vec, feature_index, &tmp_split_point, &tmp_split_loss))
+      if (find_one_feature_split(&record_index_vec, feature_index, &tmp_split_point, &tmp_split_loss))
         candidate_split_vec.push_back(
             std::make_pair(feature_index, std::make_pair(tmp_split_point, tmp_split_loss)));
     }
@@ -264,7 +264,7 @@ bool Tree::find_all_feature_split(
       uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
       // Find split cost 100ms, push job to thread cost 0.1ms, which is very expensive for sparse feature
       m_thread_pool_ptr_->do_job(std::bind(
-          &Tree::find_one_feature_split, this, record_index_vec, feature_index,
+          &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
           &(tmp_candidate_split_vec[candidate_index].second.first),
           &(tmp_candidate_split_vec[candidate_index].second.second)));
     }
@@ -320,7 +320,7 @@ bool Tree::check_split_histogram(const uint64_t& feature_index) {
 }
 
 bool Tree::find_one_feature_split(
-    const std::vector<uint64_t>& record_index_vec, const uint64_t& feature_index,
+    const std::vector<uint64_t>* record_index_vec, const uint64_t& feature_index,
     double* split_point, double* split_loss) {
   const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
   std::vector<std::pair<double, double>> candidate_split_vec;
@@ -349,18 +349,18 @@ bool Tree::find_one_feature_split(
       histogram_iter != histogram.end() - 1; ++histogram_iter) {
 
     uint64_t left_count = 0;
-    for (auto row_iter = record_index_vec.begin(); row_iter != record_index_vec.end(); ++row_iter) {
+    for (auto row_iter = record_index_vec->begin(); row_iter != record_index_vec->end(); ++row_iter) {
       if (Utility::check_double_le((*m_matrix_ptr_)(feature_index, *row_iter), histogram_iter->first)) {
         ++left_count;
       }
     }
-    uint64_t right_count = record_index_vec.size() - left_count;
+    uint64_t right_count = record_index_vec->size() - left_count;
     if (left_count < FLAGS_split_min_count ||
         right_count < FLAGS_split_min_count) {
       VLOG(101) << "Feature index " << feature_index
                 << " not suitable for split_min_count " << FLAGS_split_min_count 
                 << ", left count = " << left_count
-                << ", right count = " << record_index_vec.size() - left_count;
+                << ", right count = " << record_index_vec->size() - left_count;
       continue;
     }
     std::vector<uint64_t> left_index_vec;
@@ -368,7 +368,7 @@ bool Tree::find_one_feature_split(
     std::vector<uint64_t> right_index_vec;
     right_index_vec.reserve(right_count);
 
-    for (auto row_iter = record_index_vec.begin(); row_iter != record_index_vec.end(); ++row_iter) {
+    for (auto row_iter = record_index_vec->begin(); row_iter != record_index_vec->end(); ++row_iter) {
       if (Utility::check_double_le((*m_matrix_ptr_)(feature_index, *row_iter), histogram_iter->first)) {
         // left_label_vec.push_back((*m_label_data_ptr_)[*row_iter]);
         left_index_vec.push_back(*row_iter);
@@ -387,7 +387,7 @@ bool Tree::find_one_feature_split(
     }
 
     double total_loss = left_index_vec.size() * left_loss + right_index_vec.size() * right_loss;
-    total_loss /= record_index_vec.size();
+    total_loss /= record_index_vec->size();
     VLOG(101) << "Feature index: " << feature_index << " split point = " << histogram_iter->first
               << " left_index_vec.size() = " << left_index_vec.size()
               << " left_loss = " << left_loss

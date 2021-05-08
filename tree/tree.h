@@ -70,7 +70,7 @@ class Tree {
       double* split_loss);
 
   bool find_one_feature_split(
-      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<uint64_t>* record_index_vec,
       const uint64_t& feature_index, double* split_point,
       double* split_loss);
 

@@ -21,6 +21,7 @@
 #include "utility/utility.h"
 #include "Tree.pb.h"
 #include "thread_pool.h"
+#include "io/model_manager.h"
 
 namespace pbtree {
 
@@ -45,7 +46,8 @@ class Tree {
   bool boost_predict_data_set(
       const boost::numeric::ublas::compressed_matrix<double>& matrix,
       std::vector<std::tuple<double, double, double>>* predicted_vec,
-      std::vector<std::tuple<double, double>>* pred_moment_vec);
+      std::vector<std::tuple<double, double>>* pred_moment_vec,
+      std::vector<std::pair<double, double>>* pred_interval_vec);
 
   bool boost_update(const PBTree_Node& new_tree);
 

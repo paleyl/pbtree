@@ -1,4 +1,5 @@
 #include <sys/sysinfo.h>
+#include <stdlib.h>
 
 #include <chrono> 
 
@@ -11,7 +12,13 @@ DEFINE_uint32(tree_max_depth, 10, "Minimum record count for split");
 DEFINE_bool(boosting_mode, true, "");
 DEFINE_uint32(training_round, 10, "");
 DEFINE_double(split_gain_min_ratio, 0.01, "");
+DEFINE_double(split_gain_min_value, 1e-5, "");
 DEFINE_uint32(thread_num, 8, "");
+DEFINE_uint32(save_temp_model_round, 1000, "");
+DEFINE_string(output_model_path, "", "");
+DEFINE_double(train_record_sample_ratio, 1.0, "");
+DEFINE_double(lower_confidence_interval, 0.2, "");
+DEFINE_double(upper_confidence_interval, 0.8, "");
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
@@ -86,7 +93,8 @@ bool Tree::predict(
 bool Tree::boost_predict_data_set(
   const boost::numeric::ublas::compressed_matrix<double>& matrix,
   std::vector<std::tuple<double, double, double>>* pred_param_vec,
-  std::vector<std::tuple<double, double>>* pred_moment_vec) {
+  std::vector<std::tuple<double, double>>* pred_moment_vec,
+  std::vector<std::pair<double, double>>* pred_interval_vec) {
   auto dist = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
   for (unsigned long i = 0; i < matrix.size2(); ++i) {  // Assumed column major
     double p1 = 0, p2 = 0, p3 = 0;
@@ -102,6 +110,11 @@ bool Tree::boost_predict_data_set(
     dist->param_to_moment(pred_param, &first_moment, &second_moment);
     pred_param_vec->push_back(pred_param);
     pred_moment_vec->push_back(std::make_tuple(first_moment, second_moment));
+    double lower_bound = 0, upper_bound = 0;
+    dist->predict_interval(
+        raw_param_p1, raw_param_p2, 0.0, FLAGS_lower_confidence_interval, FLAGS_upper_confidence_interval,
+        &lower_bound, &upper_bound);
+    pred_interval_vec->push_back(std::make_pair(lower_bound, upper_bound));
   }
   return true;
 }
@@ -166,10 +179,10 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
     m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, record_index_vec, &current_loss);
   }
-  if (Utility::check_double_le(current_loss, 0)) {
-    LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
-    return true;
-  }
+  // if (Utility::check_double_le(current_loss, 0)) {
+  //   LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
+  //   return true;
+  // }
   uint64_t split_feature_index = 0;
   double split_point = 0;
   double split_loss = 0;
@@ -181,20 +194,23 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   }
   CHECK(!std::isnan(current_loss));
   CHECK(!std::isnan(split_loss));
-  LOG(INFO) << "Level " << level << " split loss = " << split_loss
+  LOG(INFO) << "Level " << level << ", record vec size = " << record_index_vec.size()
+            << ", split_feature_index = " << split_feature_index
+            << ", split_point = " << split_point
+            << ", split loss = " << split_loss
             << ", current_loss = " << current_loss;
+  double loss_param = record_index_vec.size() * 1.0 / (m_label_data_ptr_->size() * FLAGS_train_record_sample_ratio);
   if (!std::isinf(current_loss) && !std::isinf(split_loss) &&
       // !std::isnan(current_loss) && !std::isnan(split_loss) &&
-      split_loss / current_loss - 1 > -1 * FLAGS_split_gain_min_ratio) {
+//      split_loss / current_loss - 1 > -1 * FLAGS_split_gain_min_ratio) {
+      (current_loss - split_loss) * loss_param < FLAGS_split_gain_min_value) {
     LOG(INFO) << "Level " << level << " split loss = " << split_loss
               << ", current_loss = " << current_loss
-              << ", does not satisfy split_gain > " << FLAGS_split_gain_min_ratio;
+              << ", does not satisfy split_gain > " << FLAGS_split_gain_min_value;
     return true;
   }
   node->set_split_feature_index(split_feature_index);
   node->set_split_feature_value(split_point);
-  LOG(INFO) << "Level " << level << " split_feature_index = " << split_feature_index
-            << " split_point = " << split_point;
   // std::shared_ptr<PBTree_Node> left_child_ptr =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
   // std::shared_ptr<PBTree_Node> right_child_ptr =
@@ -211,6 +227,18 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
       right_index_vec.push_back(*iter);
     }
   }
+  double left_loss = 0, right_loss = 0;
+  m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_param_vec_ptr_, &left_loss, true);
+  m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_param_vec_ptr_, &right_loss, true);
+  LOG(INFO) << "Level " << level << ", record vec size = " << record_index_vec.size()
+            << ", split_feature_index = " << split_feature_index
+            << ", split_point = " << split_point
+            << ", split loss = " << split_loss
+            << ", current_loss = " << current_loss
+            << ", left_vec_size = " << left_index_vec.size()
+            << ", left_loss = " << left_loss
+            << ", right_vec_size = " << right_index_vec.size()
+            << ", right_loss = " << right_loss;
   if (left_index_vec.size() < FLAGS_split_min_count ||
       right_index_vec.size() < FLAGS_split_min_count) {
     LOG(INFO) << "Level " << level << " split failed "
@@ -293,7 +321,7 @@ bool Tree::find_all_feature_split(
       return (a.second.second < b.second.second);  // minimize the loss
       });
   for (auto iter = candidate_split_vec.begin(); iter != candidate_split_vec.end(); ++iter) {
-    LOG(INFO) << "After sorting " << iter->first << "," << iter->second.first << "," << iter->second.second;
+    VLOG(101) << "After sorting " << iter->first << "," << iter->second.first << "," << iter->second.second;
   }
   *split_feature_index = candidate_split_vec[0].first;
   *split_point = candidate_split_vec[0].second.first;
@@ -518,22 +546,39 @@ bool Tree::build_tree() {
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
 
-  std::vector<uint64_t> feature_index_vec;
+  std::vector<uint64_t> record_index_vec;
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
-    feature_index_vec.push_back(i);
+    record_index_vec.push_back(i);
   }
-
+  std::cout << record_index_vec.size() << std::endl;
+  ModelManager model_manager;
   for (unsigned int i = 0; i < FLAGS_training_round; ++i) {
     PBTree_Node* root = m_pbtree_ptr_->add_tree();
-    create_node(feature_index_vec, 0/*node level*/, root);
+    std::vector<uint64_t> train_index_vec;
+    if (Utility::check_double_equal(FLAGS_train_record_sample_ratio, 1.0)) {
+      train_index_vec = record_index_vec;
+    } else {
+      srand((unsigned int)(time(nullptr)));
+      for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+        if (rand() / double(RAND_MAX) < FLAGS_train_record_sample_ratio) {
+          train_index_vec.push_back(*iter);
+        }
+      }
+    }
+    std::cout << train_index_vec.size() << std::endl;
+    create_node(train_index_vec, 0/*node level*/, root);
+    if (i != 0 && i % FLAGS_save_temp_model_round == 0) {
+      std::string temp_output_model_path = FLAGS_output_model_path + ".temp_round_" + std::to_string(i);
+      model_manager.save_tree_model(*m_pbtree_ptr_, temp_output_model_path);
+    }
     if (FLAGS_boosting_mode) {
       boost_update(*root);
       double loss = 0;
       m_distribution_ptr_->calculate_boost_loss(
-          *m_label_data_ptr_, feature_index_vec, *m_pred_param_vec_ptr_, &loss, true);
+          *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &loss, true);
       double rmsle = 0;
       m_distribution_ptr_->evaluate_rmsle(
-          *m_label_data_ptr_, feature_index_vec, *m_pred_param_vec_ptr_, &rmsle);
+          *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &rmsle);
       LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss << ", rmsle = " << rmsle;
     }
   }

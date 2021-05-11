@@ -98,6 +98,11 @@ class Distribution {
       double* rmsle);
 
   virtual bool init_param(double* p1, double* p2, double* p3) = 0;
+
+  virtual bool predict_interval(
+      const double& p1, const double& p2, const double& p3,
+      const double& lower_interval, const double& upper_upper_interval,
+      double* lower_bound, double* upper_bound) = 0;
 };
 
 class DistributionManager {

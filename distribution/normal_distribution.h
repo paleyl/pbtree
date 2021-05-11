@@ -68,6 +68,14 @@ class NormalDistribution : public Distribution {
     return true;
   }
 
+  bool predict_interval(
+      const double& p1, const double& p2, const double& p3,
+      const double& lower_interval, const double& upper_upper_interval,
+      double* lower_bound, double* upper_bound) {
+    LOG(FATAL) << "Not implemented yet";
+    return true;
+  }
+
   // bool evaluate_rmsle(
   //     const std::vector<double>& label_data,
   //     const std::vector<uint64_t>& record_index_vec,

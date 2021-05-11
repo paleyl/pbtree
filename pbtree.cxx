@@ -11,6 +11,8 @@
 
 #include "glog/logging.h"
 #include "gflags/gflags.h"
+#include "gperftools/profiler.h"
+
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/matrix_proxy.hpp>
 #include "boost/numeric/ublas/matrix_sparse.hpp"
@@ -19,20 +21,24 @@
 #include "analysis/analysis.h"
 #include "distribution/distribution.h"
 #include "io/data_manager.h"
+#include "io/model_manager.h"
 #include "proto/build/Tree.pb.h"
 #include "tree/tree.h"
 #include "utility/utility.h"
 
 DEFINE_string(input_analysis_data_path, "", "");
 DEFINE_string(input_train_data_path, "", "");
-DEFINE_string(output_model_path, "", "");
+// DEFINE_string(output_model_path, "", "");
 DEFINE_string(input_model_path, "", "");
 DEFINE_string(input_fam_path, "", "");
 DEFINE_string(input_test_data_path, "", "");
 DEFINE_string(running_mode, "train", "");
 DEFINE_string(distribution_type, "GAMMA_DISTRIBUTION", "");
+DECLARE_string(output_model_path);
 
 // what to do next, use forest and calculate mixture
+// TODO(paleylv): 1. Optimize regularization. 2. Add model manager 
+// 3. Add optimizer manager for different optimizing mode
 
 bool run_analysis() {
   pbtree::AnalysisManager analysis_manager;
@@ -90,16 +96,32 @@ bool run_boost_predict() {
   tree.set_pbtree(pbtree_ptr);
   std::vector<std::tuple<double, double, double>> pred_param_vec;
   std::vector<std::tuple<double, double>> pred_moment_vec;
-  tree.boost_predict_data_set(*feature_matrix_ptr, &pred_param_vec, &pred_moment_vec);
+  std::vector<std::pair<double, double>> pred_interval_vec;
+  tree.boost_predict_data_set(*feature_matrix_ptr, &pred_param_vec, &pred_moment_vec, &pred_interval_vec);
   CHECK_EQ(pred_param_vec.size(), label_data_vec.size());
   CHECK_EQ(pred_moment_vec.size(), label_data_vec.size());
+  uint64_t hit_count = 0;
+  double relative_interval_width = 0;
   for (unsigned long i = 0; i < pred_param_vec.size(); ++i) {
-    LOG(INFO) << i << "-th instance: " << label_data_vec[i] << " (" 
+    if (pred_interval_vec[i].first < label_data_vec[i] &&
+        pred_interval_vec[i].second > label_data_vec[i])
+      ++hit_count;
+    double tmp_relative_iterval_width =
+        (pred_interval_vec[i].second - pred_interval_vec[i].first) / std::get<0>(pred_moment_vec[i]);
+    relative_interval_width += tmp_relative_iterval_width;
+    LOG(INFO) << i << "-th instance: " << label_data_vec[i]
+              << " [" << pred_interval_vec[i].first
+              << "," << pred_interval_vec[i].second
+              << "), (" 
               << std::get<0>(pred_moment_vec[i]) << ","
               << std::get<1>(pred_moment_vec[i]) << "), ("
               << std::get<0>(pred_param_vec[i]) << ","
               << std::get<1>(pred_param_vec[i]) << ")";
   }
+  LOG(INFO) << "Total sample = " << pred_param_vec.size()
+            << ", hit count = " << hit_count
+            << ", hit ratio = " << hit_count * 1.0 / pred_param_vec.size()
+            << ", relative interval width = " << relative_interval_width / pred_param_vec.size();
   return true;
 }
 
@@ -190,6 +212,7 @@ bool run_train() {
 }
 
 int main (int argc, char** argv) {
+  ProfilerStart("test.prof");
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
   if (FLAGS_running_mode == "train") {
@@ -201,5 +224,6 @@ int main (int argc, char** argv) {
   } else if (FLAGS_running_mode == "boost_predict") {
     run_boost_predict();
   }
+  ProfilerStop();
   return 0;
 }

@@ -233,7 +233,7 @@ bool GammaDistribution::calculate_boost_loss(
   }
   if (std::isnan(delta_k)) delta_k = 0;
   if (std::isnan(delta_theta)) delta_theta = 0;
-  LOG(INFO) << "Evaluation = " << evaluation << " Gradient delta_k = "
+  VLOG(101) << "Evaluation = " << evaluation << " Gradient delta_k = "
             << delta_k << ", gradient delta_theta = " << delta_theta;
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
     auto param = predicted_param[*iter];
@@ -274,6 +274,16 @@ bool GammaDistribution::set_boost_node_param(
   node->set_p1(delta_k);
   node->set_p2(delta_theta);
   node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
+  return true;
+}
+
+bool GammaDistribution::predict_interval(
+    const double& p1, const double& p2, const double& p3,
+    const double& lower_interval, const double& upper_interval,
+    double* lower_bound, double* upper_bound) {
+  boost::math::gamma_distribution<double> dist(p1, p2);
+  *lower_bound = boost::math::quantile(dist, lower_interval);
+  *upper_bound = boost::math::quantile(dist, upper_interval);
   return true;
 }
 

@@ -65,6 +65,10 @@ class ThreadPool {
     return result;
   }
 
+  bool is_finished() {
+    return !is_working() && is_jobs_queue_empty();
+  }
+
   std::string get_worker_status() {
     std::string out = "Worker status: ";
     for (unsigned int i = 0; i < m_thread_working_vec_.size(); ++i) {

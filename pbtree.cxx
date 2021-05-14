@@ -11,7 +11,7 @@
 
 #include "glog/logging.h"
 #include "gflags/gflags.h"
-#include "gperftools/profiler.h"
+// #include "gperftools/profiler.h"
 
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/matrix_proxy.hpp>
@@ -35,6 +35,8 @@ DEFINE_string(input_test_data_path, "", "");
 DEFINE_string(running_mode, "train", "");
 DEFINE_string(distribution_type, "GAMMA_DISTRIBUTION", "");
 DECLARE_string(output_model_path);
+DEFINE_string(output_predict_result_path, "", "");
+DEFINE_bool(do_profiling, false, "");
 
 // what to do next, use forest and calculate mixture
 // TODO(paleylv): 1. Optimize regularization. 2. Add model manager 
@@ -102,6 +104,8 @@ bool run_boost_predict() {
   CHECK_EQ(pred_moment_vec.size(), label_data_vec.size());
   uint64_t hit_count = 0;
   double relative_interval_width = 0;
+  std::ofstream output_result_file;
+  output_result_file.open(FLAGS_output_predict_result_path);
   for (unsigned long i = 0; i < pred_param_vec.size(); ++i) {
     if (pred_interval_vec[i].first < label_data_vec[i] &&
         pred_interval_vec[i].second > label_data_vec[i])
@@ -117,7 +121,16 @@ bool run_boost_predict() {
               << std::get<1>(pred_moment_vec[i]) << "), ("
               << std::get<0>(pred_param_vec[i]) << ","
               << std::get<1>(pred_param_vec[i]) << ")";
+    output_result_file << pred_interval_vec[i].first
+                       << "\t" << pred_interval_vec[i].second
+                       << "\t" << std::get<0>(pred_moment_vec[i])
+                       << "\t" << std::get<1>(pred_moment_vec[i])
+                       << "\t" << std::get<0>(pred_param_vec[i])
+                       << "\t" << std::get<1>(pred_param_vec[i])
+                       << "\n";
+    ;
   }
+  output_result_file.close();
   LOG(INFO) << "Total sample = " << pred_param_vec.size()
             << ", hit count = " << hit_count
             << ", hit ratio = " << hit_count * 1.0 / pred_param_vec.size()
@@ -187,7 +200,7 @@ bool run_train() {
       std::make_shared<std::vector<double>>(label_vec);
   // auto descriptor = pbtree::PBTree_DistributionType_descriptor();
   // auto tmp = descriptor->FindValueByName(FLAGS_distribution_type)->index();
-  pbtree::PBTree_DistributionType tmp_type;
+  pbtree::PBTree_DistributionType tmp_type = pbtree::PBTree_DistributionType_GAMMA_DISTRIBUTION;
   pbtree::PBTree_DistributionType_Parse(FLAGS_distribution_type, &tmp_type);
   std::shared_ptr<pbtree::Distribution> distribution_ptr =
       pbtree::DistributionManager::get_distribution(tmp_type);
@@ -212,7 +225,8 @@ bool run_train() {
 }
 
 int main (int argc, char** argv) {
-  ProfilerStart("test.prof");
+
+  // ProfilerStart("test.prof");
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
   if (FLAGS_running_mode == "train") {
@@ -224,6 +238,7 @@ int main (int argc, char** argv) {
   } else if (FLAGS_running_mode == "boost_predict") {
     run_boost_predict();
   }
-  ProfilerStop();
+
+  // ProfilerStop();
   return 0;
 }

@@ -9,6 +9,7 @@
 #include <vector>
 #include <memory>
 #include <tuple>
+#include <unordered_set>
 
 #include "glog/logging.h"
 #include "gflags/gflags.h"
@@ -58,7 +59,7 @@ class Tree {
 
   bool create_node(const std::vector<uint64_t>& record_index_vec,
       const uint32_t& level,
-      PBTree_Node* node);
+      PBTree_Node* node, const std::vector<uint64_t>* input_feature_vec = nullptr);
 
   bool build_histogram(
       const std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>& matrix_ptr,
@@ -69,7 +70,7 @@ class Tree {
   bool find_all_feature_split(
       const std::vector<uint64_t>& row_index_vec,
       uint64_t* split_feature_index, double* split_point,
-      double* split_loss);
+      double* split_loss, const std::vector<uint64_t>* candidate_feature_vec);
 
   bool find_one_feature_split(
       const std::vector<uint64_t>* record_index_vec,
@@ -94,6 +95,11 @@ class Tree {
 
   bool check_split_histogram(const uint64_t& feature_index);
 
+  bool check_valid_candidate(
+      const std::vector<uint64_t> record_index_vec,
+      const std::vector<uint64_t> previous_feature_vec,
+      std::vector<uint64_t>* candidate_feature_vec);
+
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
@@ -106,6 +112,8 @@ class Tree {
   std::shared_ptr<std::vector<uint64_t>> m_valid_split_feature_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>>> m_valid_histogram_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::pair<double, double>>>> m_candidate_split_vec_ptr_;
+  uint64_t m_candidate_feature_num_;
+  // std::shared_ptr<std::unordered_set<uint64_t>> m_candidate_feature_set_ptr_;
 };
 }  // namespace pbtree
 

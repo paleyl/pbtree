@@ -27,6 +27,7 @@ DEFINE_bool(evaluate_loss_every_node, false, "");
 namespace pbtree {
 
 bool Tree::init() {
+  m_candidate_feature_num_ = 0;
   unsigned int num_cpu_cores = get_nprocs_conf();
   int thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
       num_cpu_cores * 2 / 3 : FLAGS_thread_num;
@@ -166,7 +167,7 @@ bool Tree::boost_update(const PBTree_Node& new_tree) {
 
 bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     const uint32_t& level,
-    PBTree_Node* node) {
+    PBTree_Node* node, const std::vector<uint64_t>* parents_feature_vec_ptr) {
   if (record_index_vec.size() < FLAGS_split_min_count ||
       level > FLAGS_tree_max_depth) {
     node->Clear();
@@ -184,6 +185,17 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
     m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, record_index_vec, &current_loss);
   }
+  std::vector<uint64_t>* candidate_feature_vec_ptr = nullptr;
+  std::vector<uint64_t> candidate_feature_vec;
+  LOG(INFO) << "m_candidate_feature_num_ " << m_candidate_feature_num_ << ", " << m_valid_split_feature_vec_ptr_->size();
+  if (m_candidate_feature_num_ == m_valid_split_feature_vec_ptr_->size() || parents_feature_vec_ptr) {
+    if (parents_feature_vec_ptr)
+      check_valid_candidate(record_index_vec, *parents_feature_vec_ptr, &candidate_feature_vec);
+    else 
+      check_valid_candidate(record_index_vec, *m_valid_split_feature_vec_ptr_, &candidate_feature_vec);
+    candidate_feature_vec_ptr = &candidate_feature_vec;
+  }
+  LOG(INFO) << "Level " << level << ", candidate_feature_vec = " << candidate_feature_vec.size();
   // if (Utility::check_double_le(current_loss, 0)) {
   //   LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
   //   return true;
@@ -192,7 +204,7 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   double split_point = 0;
   double split_loss = 0;
   bool split_ret = find_all_feature_split(
-      record_index_vec, &split_feature_index, &split_point, &split_loss);
+      record_index_vec, &split_feature_index, &split_point, &split_loss, candidate_feature_vec_ptr);
   if (!split_ret) {
     LOG(INFO) << "Level " << level << " find split feature failed!";
     return true;
@@ -259,20 +271,22 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   node->set_allocated_left_child(left_child);
   node->set_allocated_right_child(right_child);
   uint32_t next_level = level + 1;
-  if (!create_node(left_index_vec, next_level, left_child)) {
+  if (!create_node(left_index_vec, next_level, left_child, candidate_feature_vec_ptr)) {
     node->clear_left_child();
   }
 
-  if (!create_node(right_index_vec, next_level, right_child)) {
+  if (!create_node(right_index_vec, next_level, right_child, candidate_feature_vec_ptr)) {
     node->clear_right_child();
   }
+  m_candidate_feature_num_ = 0;
   return true;
 }
 
 bool Tree::find_all_feature_split(
     const std::vector<uint64_t>& record_index_vec,
     uint64_t* split_feature_index, double* split_point,
-    double* split_loss) {
+    double* split_loss,
+    const std::vector<uint64_t>* candidate_feature_vec) {
   if (record_index_vec.size() < FLAGS_split_min_count) {
     return false;
   }
@@ -302,6 +316,10 @@ bool Tree::find_all_feature_split(
     //     std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX)));
     // }
     uint64_t candidate_feature_num = 0;
+    // std::unordered_set<uint64_t>* valid_feature_set_ptr;
+    std::unordered_set<uint64_t> candidate_feature_set;
+    if (candidate_feature_vec)
+      candidate_feature_set = std::unordered_set<uint64_t>(candidate_feature_vec->begin(), candidate_feature_vec->end());
     for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
       uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
       uint64_t candidate_index = i;
@@ -312,6 +330,8 @@ bool Tree::find_all_feature_split(
               << ", current_record_ratio = " << current_record_ratio
               << ", expected_feature_non_zero_ratio = " << expected_feature_non_zero_ratio
               << ", feature_zero_ratio " << feature_zero_ratio;
+      if (candidate_feature_vec && candidate_feature_set.find(feature_index) == candidate_feature_set.end())
+        continue;
       if (feature_zero_ratio > expected_feature_non_zero_ratio &&
           feature_zero_ratio < 1 - expected_feature_non_zero_ratio) {
         m_thread_pool_ptr_->do_job(std::bind(
@@ -321,7 +341,9 @@ bool Tree::find_all_feature_split(
         ++candidate_feature_num;
       }
     }
-    VLOG(1) << "Candidate feature num = " << candidate_feature_num;
+    VLOG(1) << "Candidate feature num = " << candidate_feature_num 
+            << ", candidate_feature_set size = " << candidate_feature_set.size();
+    m_candidate_feature_num_ = candidate_feature_num;
     // for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
     //   uint64_t feature_index = *iter;
     //   uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
@@ -390,6 +412,22 @@ bool Tree::check_split_histogram(const uint64_t& feature_index) {
     VLOG(101) << "Feature index " << feature_index << " zero ratio "
               << histogram[0].second << " > " << FLAGS_split_min_ratio;
     return false;
+  }
+  return true;
+}
+
+bool Tree::check_valid_candidate(
+    const std::vector<uint64_t> record_index_vec,
+    const std::vector<uint64_t> previous_feature_vec,
+    std::vector<uint64_t>* candidate_feature_vec) {  
+  for (auto iter_feature = previous_feature_vec.begin();
+      iter_feature != previous_feature_vec.end(); ++iter_feature) {
+    double tmp_sum = 0;
+    for (auto iter_record = record_index_vec.begin();
+        iter_record != record_index_vec.end(); ++iter_record) {
+      tmp_sum += (*m_matrix_ptr_)(*iter_feature, *iter_record);
+    }
+    if (tmp_sum > FLAGS_split_min_count) candidate_feature_vec->push_back(*iter_feature);
   }
   return true;
 }

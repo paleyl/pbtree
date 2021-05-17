@@ -14,7 +14,7 @@ SET(CMAKE_EXE_LINKER_FLAGS "-static-libgcc  -static-libstdc++")
 
 list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/gflags/build/lib/libgflags.a")
 list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/glog/build/libglog.a")
-#list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/gperftools/.libs/libtcmalloc_and_profiler.a")
+list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/thirdparty/gperftools/.libs/libtcmalloc_and_profiler.a")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/gflags/build/include")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/glog/build")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/glog/src")

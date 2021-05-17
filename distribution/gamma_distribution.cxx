@@ -241,8 +241,10 @@ bool GammaDistribution::calculate_boost_loss(
     double theta = std::get<1>(param);
     double new_k = k + delta_k;
     double new_theta = theta + delta_theta;
-    double raw_k = exp(new_k);
-    double raw_theta = exp(new_theta);
+    double raw_k, raw_theta;
+    transform_param(k, theta, 0, &raw_k, &raw_theta, nullptr);
+    // double raw_k = exp(new_k);
+    // double raw_theta = exp(new_theta);
     // if (Utility::check_double_le(new_k, 0) || std::isnan(new_k)) new_k = 1e-3;
     // if (Utility::check_double_le(new_theta, 0) || std::isnan(new_theta)) new_theta = 1e-3;
     boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);

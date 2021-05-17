@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include "glog/logging.h"
 #include "gflags/gflags.h"
@@ -35,7 +36,9 @@ class DataManager {
       const std::string& data_path,
       const uint32_t& major_type,
       std::vector<double>* label_vec,
-      std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>* matrix);
+      std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>* matrix,
+      std::shared_ptr<boost::numeric::ublas::mapped_matrix<double,
+      boost::numeric::ublas::row_major, std::unordered_map<std::size_t, double>>>* mapped_matrx = nullptr);
 
   // bool read_test_data(
   //     const std::string& data_path,

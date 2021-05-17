@@ -113,6 +113,8 @@ class Tree {
   std::shared_ptr<std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>>> m_valid_histogram_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::pair<double, double>>>> m_candidate_split_vec_ptr_;
   uint64_t m_candidate_feature_num_;
+  std::shared_ptr<std::map<uint64_t, std::vector<uint64_t>>> m_non_zero_value_map_ptr_;
+  uint64_t m_max_non_zero_per_feature_;
   // std::shared_ptr<std::unordered_set<uint64_t>> m_candidate_feature_set_ptr_;
 };
 }  // namespace pbtree

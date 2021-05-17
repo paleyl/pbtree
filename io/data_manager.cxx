@@ -33,7 +33,9 @@ bool build_instance_batch(
 bool DataManager::read_train_data(
     const std::string& data_path, const uint32_t& major_type,
     std::vector<double>* label_vec,
-    std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>* matrix) {
+    std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>>* matrix,
+    std::shared_ptr<boost::numeric::ublas::mapped_matrix<double,
+    boost::numeric::ublas::row_major, std::unordered_map<std::size_t, double>>>* mapped_matrix /*=nullptr*/) {
   FILE* fp1 = fopen(data_path.data(), "r");
   if (fp1 == nullptr) {
     LOG(ERROR) << "Open input data failed! " << data_path;
@@ -129,6 +131,17 @@ bool DataManager::read_train_data(
     }
   }
   *matrix = mat_ptr;
+  if (mapped_matrix) {
+    boost::numeric::ublas::mapped_matrix<double,
+        boost::numeric::ublas::row_major, std::unordered_map<std::size_t, double>> tmp_mapped_matrix(
+            mat_ptr->size1(), mat_ptr->size2(), mat_ptr->nnz());
+    for (auto iter = tmp_data_vec.begin(); iter != tmp_data_vec.end(); ++iter) {
+      tmp_mapped_matrix(iter->first.second, iter->first.first) = iter->second;
+    }
+    *mapped_matrix = std::make_shared<boost::numeric::ublas::mapped_matrix<double,
+        boost::numeric::ublas::row_major, std::unordered_map<std::size_t, double>>>(tmp_mapped_matrix);
+  }
+
   if (label_vec != nullptr) {
     for (auto iter = data.begin(); iter != data.end(); ++iter) {
       label_vec->push_back(iter->first);

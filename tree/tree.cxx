@@ -21,6 +21,7 @@ DEFINE_double(lower_confidence_interval, 0.2, "");
 DEFINE_double(upper_confidence_interval, 0.8, "");
 DEFINE_double(feature_non_zero_convert_ratio, 0.003, "");
 DEFINE_bool(evaluate_loss_every_node, false, "");
+DEFINE_double(record_min_ratio, 5e-3, "");
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
@@ -28,6 +29,7 @@ namespace pbtree {
 
 bool Tree::init() {
   m_candidate_feature_num_ = 0;
+  m_max_non_zero_per_feature_ = 0;
   unsigned int num_cpu_cores = get_nprocs_conf();
   int thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
       num_cpu_cores * 2 / 3 : FLAGS_thread_num;
@@ -333,8 +335,8 @@ bool Tree::find_all_feature_split(
               << ", feature_zero_ratio " << feature_zero_ratio;
       if (candidate_feature_vec && candidate_feature_set.find(feature_index) == candidate_feature_set.end())
         continue;
-      if (feature_zero_ratio > expected_feature_non_zero_ratio &&
-          feature_zero_ratio < 1 - expected_feature_non_zero_ratio) {
+      if ((feature_zero_ratio > expected_feature_non_zero_ratio &&
+          feature_zero_ratio < 1 - expected_feature_non_zero_ratio) || current_record_ratio < FLAGS_record_min_ratio) {
         candidate_split_vec.push_back(std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX)));
         ++candidate_feature_num;
       }
@@ -458,16 +460,30 @@ bool Tree::check_split_histogram(const uint64_t& feature_index) {
 bool Tree::check_valid_candidate(
     const std::vector<uint64_t> record_index_vec,
     const std::vector<uint64_t> previous_feature_vec,
-    std::vector<uint64_t>* candidate_feature_vec) {  
+    std::vector<uint64_t>* candidate_feature_vec) {
+
+  std::vector<uint64_t> vec(record_index_vec.size() + m_max_non_zero_per_feature_);
   for (auto iter_feature = previous_feature_vec.begin();
       iter_feature != previous_feature_vec.end(); ++iter_feature) {
-    double tmp_sum = 0;
-    for (auto iter_record = record_index_vec.begin();
-        iter_record != record_index_vec.end(); ++iter_record) {
-      tmp_sum += (*m_matrix_ptr_)(*iter_feature, *iter_record);
+    auto tmp_non_zero_vec_iter = m_non_zero_value_map_ptr_->find(*iter_feature);
+    CHECK(tmp_non_zero_vec_iter != m_non_zero_value_map_ptr_->end());
+    auto iter = std::set_intersection(
+        tmp_non_zero_vec_iter->second.begin(),
+        tmp_non_zero_vec_iter->second.end(),
+        record_index_vec.begin(), record_index_vec.end(), vec.begin());
+    if (iter - vec.begin() >= FLAGS_split_min_count) {
+      candidate_feature_vec->push_back(*iter_feature);
     }
-    if (tmp_sum > FLAGS_split_min_count) candidate_feature_vec->push_back(*iter_feature);
   }
+  // for (auto iter_feature = previous_feature_vec.begin();
+  //     iter_feature != previous_feature_vec.end(); ++iter_feature) {
+  //   double tmp_sum = 0;
+  //   for (auto iter_record = record_index_vec.begin();
+  //       iter_record != record_index_vec.end(); ++iter_record) {
+  //     tmp_sum += (*m_mapped_feature_matrix_ptr_)(*iter_feature, *iter_record);
+  //   }
+  //   if (tmp_sum > FLAGS_split_min_count) candidate_feature_vec->push_back(*iter_feature);
+  // }
   return true;
 }
 
@@ -622,12 +638,12 @@ bool Tree::build_tree() {
       std::make_shared<std::vector
       <std::vector<std::pair<double, float>>>>(histogram_vec);
   LOG(INFO) << "Begin building histogram";
-  auto col_iter = m_matrix_ptr_->begin1();
+  auto feature_iter = m_matrix_ptr_->begin1();
   for (unsigned long j = 0; j < m_matrix_ptr_->size1(); ++j) {
     std::vector<std::pair<double, float>> tmp_histogram;
-    build_histogram(m_matrix_ptr_, j, col_iter, &tmp_histogram);
+    build_histogram(m_matrix_ptr_, j, feature_iter, &tmp_histogram);
     histogram_vec_ptr->push_back(tmp_histogram);
-    ++col_iter;
+    ++feature_iter;
     if (j % 10000 == 0) {
       LOG(INFO) << "Built " << j << " histogram";
     }
@@ -643,12 +659,26 @@ bool Tree::build_tree() {
 
   std::vector<uint64_t> valid_split_feature_vec;
   std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>> valid_histogram_vec;
+  std::map<uint64_t, std::vector<uint64_t>> non_zero_value_map;
+  feature_iter = m_matrix_ptr_->begin1();
   for (unsigned long feature_index = 0; feature_index < m_matrix_ptr_->size1(); ++feature_index) {
     if (check_split_histogram(feature_index)) {
       valid_split_feature_vec.push_back(feature_index);
       valid_histogram_vec.push_back(std::make_pair(feature_index, (*m_histogram_vec_ptr_)[feature_index]));
+      std::vector<uint64_t> tmp_vec;
+      for (auto record_iter = feature_iter.begin(); record_iter != feature_iter.end(); ++record_iter) {
+        tmp_vec.push_back(*record_iter);
+      }
+      std::sort(tmp_vec.begin(), tmp_vec.end());
+      non_zero_value_map[feature_index] = tmp_vec;
+      if (tmp_vec.size() > m_max_non_zero_per_feature_) {
+        m_max_non_zero_per_feature_ = tmp_vec.size();
+      }
     }
+    ++feature_iter;
   }
+  m_non_zero_value_map_ptr_ =
+      std::make_shared<std::map<uint64_t, std::vector<uint64_t>>>(non_zero_value_map);
   // std::sort(valid_histogram_vec.begin(), valid_histogram_vec.end(),
   //     [](const std::pair<uint64_t, std::vector<std::pair<double, float>>>& a,
   //     const std::pair<uint64_t, std::vector<std::pair<double, float>>>& b){
@@ -690,15 +720,16 @@ bool Tree::build_tree() {
   LOG(INFO) << "Valid feature index size is " << m_valid_split_feature_vec_ptr_->size();
   // std::shared_ptr<PBTree_Node> root =
   //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
-  std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
-  candidate_split_vec.resize(m_valid_histogram_vec_ptr_->size());
-  for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
-    uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
-    candidate_split_vec[i] =
-      std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX));
-  }
-  m_candidate_split_vec_ptr_ =
-      std::make_shared<std::vector<std::pair<uint64_t, std::pair<double, double>>>>(candidate_split_vec);
+  // std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
+  // candidate_split_vec.resize(m_valid_histogram_vec_ptr_->size());
+  // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
+  //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
+  //   candidate_split_vec[i] =
+  //     std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX));
+  // }
+  // m_candidate_split_vec_ptr_ =
+  //     std::make_shared<std::vector<std::pair<uint64_t, std::pair<double, double>>>>(candidate_split_vec);
+
   std::vector<uint64_t> record_index_vec;
   record_index_vec.reserve(m_matrix_ptr_->size2());
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {

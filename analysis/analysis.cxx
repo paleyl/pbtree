@@ -135,6 +135,7 @@ bool AnalysisManager::draw_one_node(
     if (FLAGS_boosting_mode) {
       distribution_ptr->init_param(&p1, &p2, &p3);
     }
+//    double raw_p1 = node.p1() + 
     distribution_ptr->plot_distribution_curve(node.p1() + p1, node.p2() + p2, node.p3() + p3, &curve_str);
     std::ofstream curve_file;
     std::string curve_file_name = FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
@@ -178,7 +179,7 @@ bool AnalysisManager::draw_one_node(
     *output_str = *output_str
         + "tree_" + std::to_string(tree_index) + "_node_" + std::to_string(current_node_id)
         + " [label=\""
-        + parent_split_condition + "\n"
+        + "size = " + std::to_string(record_vec.size()) + "\n"
         + distribution_ss.str()
         + "\"] ;\n";
   }

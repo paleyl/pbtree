@@ -139,8 +139,8 @@ class ThreadPool {
   std::condition_variable m_cond_var_;
   bool m_is_shutdown_;
   std::queue<std::function<void(void)>> m_jobs_queue_;
-  std::queue<std::function<bool(std::vector<uint64_t>&, uint64_t&, double*,
-      double*)>> m_split_jobs_queue_;
+  // std::queue<std::function<bool(std::vector<uint64_t>&, uint64_t&, double*,
+  //     double*)>> m_split_jobs_queue_;
   std::vector<std::thread> m_threads_vec_;
   std::vector<int> m_thread_working_vec_;
 };

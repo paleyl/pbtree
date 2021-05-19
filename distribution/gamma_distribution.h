@@ -59,11 +59,7 @@ class GammaDistribution : public Distribution {
 
   bool transform_param(
       const double& raw_p1, const double& raw_p2, const double& raw_p3,
-      double* p1, double* p2, double* p3) {
-    *p1 = exp(raw_p1);
-    *p2 = exp(raw_p2);
-    return true;
-  }
+      double* p1, double* p2, double* p3);
 
   bool predict_interval(
       const double& p1, const double& p2, const double& p3,

@@ -141,7 +141,9 @@ bool DataManager::read_train_data(
     *mapped_matrix = std::make_shared<boost::numeric::ublas::mapped_matrix<double,
         boost::numeric::ublas::row_major, std::unordered_map<std::size_t, double>>>(tmp_mapped_matrix);
   }
-
+  LOG(INFO) << "Input data size1 = " << mat_ptr->size1()
+            << " size2 = " << mat_ptr->size2()
+            << " nnz = " << mat_ptr->nnz();
   if (label_vec != nullptr) {
     for (auto iter = data.begin(); iter != data.end(); ++iter) {
       label_vec->push_back(iter->first);

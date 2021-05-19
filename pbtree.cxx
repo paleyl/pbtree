@@ -224,11 +224,19 @@ bool run_train() {
   return true;
 }
 
+void SignalHandle(const char *data, int size) {
+  std::string str = std::string(data, size);
+  LOG(ERROR) << str;
+}
+
 int main (int argc, char** argv) {
 
   // ProfilerStart("test.prof");
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
+  LOG(INFO) << ::google::CommandlineFlagsIntoString();
+  ::google::InstallFailureSignalHandler();
+  ::google::InstallFailureWriter(&SignalHandle);
   if (FLAGS_running_mode == "train") {
     run_train();
   } else if (FLAGS_running_mode == "test") {

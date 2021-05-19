@@ -100,6 +100,12 @@ class Tree {
       const std::vector<uint64_t> previous_feature_vec,
       std::vector<uint64_t>* candidate_feature_vec);
 
+  void do_intersection(
+      const std::vector<uint64_t>::const_iterator& iter_begin,
+      const std::vector<uint64_t>::const_iterator& iter_end,
+      const std::vector<uint64_t>* record_inded_vec_ptr,
+      uint64_t* num);
+
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
@@ -112,7 +118,6 @@ class Tree {
   std::shared_ptr<std::vector<uint64_t>> m_valid_split_feature_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>>> m_valid_histogram_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::pair<double, double>>>> m_candidate_split_vec_ptr_;
-  uint64_t m_candidate_feature_num_;
   std::shared_ptr<std::map<uint64_t, std::vector<uint64_t>>> m_non_zero_value_map_ptr_;
   uint64_t m_max_non_zero_per_feature_;
   // std::shared_ptr<std::unordered_set<uint64_t>> m_candidate_feature_set_ptr_;

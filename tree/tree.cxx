@@ -22,13 +22,14 @@ DEFINE_double(upper_confidence_interval, 0.8, "");
 DEFINE_double(feature_non_zero_convert_ratio, 0.003, "");
 DEFINE_bool(evaluate_loss_every_node, false, "");
 DEFINE_double(record_min_ratio, 5e-3, "");
+DEFINE_uint32(trim_feature_batch_size, 1000, "");
+DEFINE_bool(use_multi_thread_filter, true, "");
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
 namespace pbtree {
 
 bool Tree::init() {
-  m_candidate_feature_num_ = 0;
   m_max_non_zero_per_feature_ = 0;
   unsigned int num_cpu_cores = get_nprocs_conf();
   int thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
@@ -176,8 +177,9 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     return false;
   }
   node->set_level(level);
-  LOG(INFO) << "Building node on level " << level;
-  LOG(INFO) << "Record vec size = " << record_index_vec.size();
+  double current_record_ratio = record_index_vec.size() * 1.0 / m_matrix_ptr_->size2();
+  LOG(INFO) << "Level " << level << " building start, record vec size = " << record_index_vec.size()
+            << ", current record ratio = " << current_record_ratio;
   double current_loss = 0;
   if (FLAGS_boosting_mode) {
     m_distribution_ptr_->set_boost_node_param(
@@ -189,15 +191,19 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   }
   std::vector<uint64_t>* candidate_feature_vec_ptr = nullptr;
   std::vector<uint64_t> candidate_feature_vec;
-  LOG(INFO) << "m_candidate_feature_num_ " << m_candidate_feature_num_ << ", " << m_valid_split_feature_vec_ptr_->size();
-  if (m_candidate_feature_num_ == m_valid_split_feature_vec_ptr_->size() || parents_feature_vec_ptr) {
+  candidate_feature_vec.clear();
+  if (current_record_ratio < FLAGS_record_min_ratio) {
     if (parents_feature_vec_ptr)
       check_valid_candidate(record_index_vec, *parents_feature_vec_ptr, &candidate_feature_vec);
     else 
       check_valid_candidate(record_index_vec, *m_valid_split_feature_vec_ptr_, &candidate_feature_vec);
     candidate_feature_vec_ptr = &candidate_feature_vec;
   }
-  LOG(INFO) << "Level " << level << ", candidate_feature_vec = " << candidate_feature_vec.size();
+  LOG(INFO) << "Level " << level
+            << ", parents candidate_feature_num "
+            << std::to_string(parents_feature_vec_ptr ? parents_feature_vec_ptr->size() : 0)
+            << ", v.s. all valid feature " << m_valid_split_feature_vec_ptr_->size()
+            << ", after filter candidate_feature_vec size = " << candidate_feature_vec.size();
   // if (Utility::check_double_le(current_loss, 0)) {
   //   LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
   //   return true;
@@ -280,7 +286,6 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   if (!create_node(right_index_vec, next_level, right_child, candidate_feature_vec_ptr)) {
     node->clear_right_child();
   }
-  m_candidate_feature_num_ = 0;
   return true;
 }
 
@@ -370,9 +375,8 @@ bool Tree::find_all_feature_split(
     //     ++candidate_feature_num;
     //   }
     // }
-    VLOG(1) << "Candidate feature num = " << candidate_feature_num 
-            << ", candidate_feature_set size = " << candidate_feature_set.size();
-    m_candidate_feature_num_ = candidate_feature_num;
+    VLOG(1) << "In calculation candidate feature num = " << candidate_feature_num 
+            << ", triming candidate_feature_set size = " << candidate_feature_set.size();
     // for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
     //   uint64_t feature_index = *iter;
     //   uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
@@ -457,33 +461,74 @@ bool Tree::check_split_histogram(const uint64_t& feature_index) {
   return true;
 }
 
-bool Tree::check_valid_candidate(
-    const std::vector<uint64_t> record_index_vec,
-    const std::vector<uint64_t> previous_feature_vec,
-    std::vector<uint64_t>* candidate_feature_vec) {
-
-  std::vector<uint64_t> vec(record_index_vec.size() + m_max_non_zero_per_feature_);
-  for (auto iter_feature = previous_feature_vec.begin();
-      iter_feature != previous_feature_vec.end(); ++iter_feature) {
+void Tree::do_intersection(
+    const std::vector<uint64_t>::const_iterator& iter_begin,
+    const std::vector<uint64_t>::const_iterator& iter_end,
+    const std::vector<uint64_t>* record_inded_vec_ptr,
+    uint64_t* num) {
+  std::vector<uint64_t> vec(record_inded_vec_ptr->size() + m_max_non_zero_per_feature_);
+  for (auto iter_feature = iter_begin; iter_feature != iter_end; ++iter_feature) {
     auto tmp_non_zero_vec_iter = m_non_zero_value_map_ptr_->find(*iter_feature);
-    CHECK(tmp_non_zero_vec_iter != m_non_zero_value_map_ptr_->end());
+    // CHECK(tmp_non_zero_vec_iter != m_non_zero_value_map_ptr_->end());
+    if (tmp_non_zero_vec_iter == m_non_zero_value_map_ptr_->end()) {
+      LOG(ERROR) << "Feature " << *iter_feature << " not found in feature map";
+      for (auto tmp_iter = iter_begin; tmp_iter != iter_end; ++tmp_iter) {
+        VLOG(1) << "Previous feature vec[" << tmp_iter - iter_begin << "]" << *tmp_iter;
+      }
+      continue;
+    }
     auto iter = std::set_intersection(
         tmp_non_zero_vec_iter->second.begin(),
         tmp_non_zero_vec_iter->second.end(),
-        record_index_vec.begin(), record_index_vec.end(), vec.begin());
-    if (iter - vec.begin() >= FLAGS_split_min_count) {
-      candidate_feature_vec->push_back(*iter_feature);
+        record_inded_vec_ptr->begin(), record_inded_vec_ptr->end(), vec.begin());
+    *(num + (iter_feature - iter_begin)) = iter - vec.begin();
+  }
+  return;
+}
+
+bool Tree::check_valid_candidate(
+    const std::vector<uint64_t> record_index_vec,
+    const std::vector<uint64_t> pre_filter_feature_vec,
+    std::vector<uint64_t>* candidate_feature_vec) {
+  // Single thread implementation
+  if (FLAGS_thread_num == 1 || !FLAGS_use_multi_thread_filter) {
+    std::vector<uint64_t> vec(record_index_vec.size() + m_max_non_zero_per_feature_);
+    for (auto iter_feature = pre_filter_feature_vec.begin();
+        iter_feature != pre_filter_feature_vec.end(); ++iter_feature) {
+      auto tmp_non_zero_vec_iter = m_non_zero_value_map_ptr_->find(*iter_feature);
+      CHECK(tmp_non_zero_vec_iter != m_non_zero_value_map_ptr_->end());
+      auto iter = std::set_intersection(
+          tmp_non_zero_vec_iter->second.begin(),
+          tmp_non_zero_vec_iter->second.end(),
+          record_index_vec.begin(), record_index_vec.end(), vec.begin());
+      if (iter - vec.begin() >= FLAGS_split_min_count) {
+        candidate_feature_vec->push_back(*iter_feature);
+      }
+    }
+    return true;
+  }
+  // Multi-thread implementation
+  std::vector<uint64_t> result_vec;
+  result_vec.resize(pre_filter_feature_vec.size());
+  uint32_t batch_size = FLAGS_trim_feature_batch_size;
+  for (auto iter_feature = pre_filter_feature_vec.begin();
+      iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
+    auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?
+        iter_feature + batch_size : pre_filter_feature_vec.end();
+    m_thread_pool_ptr_->do_job(
+        std::bind(&Tree::do_intersection, this,
+        iter_feature,
+        current_turn_end,
+        &record_index_vec,
+        &(result_vec[iter_feature - pre_filter_feature_vec.begin()])
+    ));
+  }
+  while (!m_thread_pool_ptr_->is_finished()) {/*Just wait for finishing*/}
+  for (unsigned long i = 0; i < pre_filter_feature_vec.size(); ++i) {
+    if (result_vec[i] >= FLAGS_split_min_count) {
+      candidate_feature_vec->push_back(pre_filter_feature_vec[i]);
     }
   }
-  // for (auto iter_feature = previous_feature_vec.begin();
-  //     iter_feature != previous_feature_vec.end(); ++iter_feature) {
-  //   double tmp_sum = 0;
-  //   for (auto iter_record = record_index_vec.begin();
-  //       iter_record != record_index_vec.end(); ++iter_record) {
-  //     tmp_sum += (*m_mapped_feature_matrix_ptr_)(*iter_feature, *iter_record);
-  //   }
-  //   if (tmp_sum > FLAGS_split_min_count) candidate_feature_vec->push_back(*iter_feature);
-  // }
   return true;
 }
 
@@ -661,22 +706,27 @@ bool Tree::build_tree() {
   std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>> valid_histogram_vec;
   std::map<uint64_t, std::vector<uint64_t>> non_zero_value_map;
   feature_iter = m_matrix_ptr_->begin1();
+  uint64_t valid_total_nnz = 0;
   for (unsigned long feature_index = 0; feature_index < m_matrix_ptr_->size1(); ++feature_index) {
     if (check_split_histogram(feature_index)) {
       valid_split_feature_vec.push_back(feature_index);
       valid_histogram_vec.push_back(std::make_pair(feature_index, (*m_histogram_vec_ptr_)[feature_index]));
       std::vector<uint64_t> tmp_vec;
       for (auto record_iter = feature_iter.begin(); record_iter != feature_iter.end(); ++record_iter) {
-        tmp_vec.push_back(*record_iter);
+        tmp_vec.push_back(record_iter.index2());
+        VLOG(101) << "Record iter " << record_iter.index1() << " " << record_iter.index2();
       }
-      std::sort(tmp_vec.begin(), tmp_vec.end());
+      // std::sort(tmp_vec.begin(), tmp_vec.end());
       non_zero_value_map[feature_index] = tmp_vec;
       if (tmp_vec.size() > m_max_non_zero_per_feature_) {
         m_max_non_zero_per_feature_ = tmp_vec.size();
       }
+      valid_total_nnz += tmp_vec.size();
     }
     ++feature_iter;
   }
+  LOG(INFO) << "Max feature-wise nnz = " << m_max_non_zero_per_feature_
+            << " valid total_nnz = " << valid_total_nnz;
   m_non_zero_value_map_ptr_ =
       std::make_shared<std::map<uint64_t, std::vector<uint64_t>>>(non_zero_value_map);
   // std::sort(valid_histogram_vec.begin(), valid_histogram_vec.end(),
@@ -751,7 +801,7 @@ bool Tree::build_tree() {
     }
     LOG(INFO) << "Begin training round " << i << " with " << train_index_vec.size() << " instances";
     create_node(train_index_vec, 0/*node level*/, root);
-    if (i != 0 && i % FLAGS_save_temp_model_round == 0) {
+    if ((i + 1) % FLAGS_save_temp_model_round == 0) {
       std::string temp_output_model_path = FLAGS_output_model_path + ".temp_round_" + std::to_string(i);
       model_manager.save_tree_model(*m_pbtree_ptr_, temp_output_model_path);
     }

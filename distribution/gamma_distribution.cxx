@@ -3,8 +3,17 @@
 DECLARE_double(min_prob);
 DECLARE_double(regularization_param);
 DECLARE_uint32(distribution_sample_point_num);
+DEFINE_double(gamma_k_lower_bound, 0, "");
 
 namespace pbtree {
+
+bool GammaDistribution::transform_param(
+    const double& raw_p1, const double& raw_p2, const double& raw_p3,
+    double* p1, double* p2, double* p3) {
+  *p1 = exp(raw_p1) + FLAGS_gamma_k_lower_bound;
+  *p2 = exp(raw_p2);
+  return true;
+}
 
 bool GammaDistribution::calculate_loss(
     const std::vector<double>& label_data,
@@ -142,8 +151,10 @@ bool GammaDistribution::calculate_boost_gradient(
     double log_k = std::get<0>(param);
     double log_theta = std::get<1>(param);
 
-    double k = exp(log_k);
-    double theta = exp(log_theta);
+    double k, theta;
+    transform_param(log_k, log_theta, 0, &k, &theta, nullptr);
+    // double k = exp(log_k);
+    // double theta = exp(log_theta);
 
     double y = label_data[*iter];
     double gradient_log_k = (log(y / theta) - boost::math::digamma(k)) * k;
@@ -242,7 +253,7 @@ bool GammaDistribution::calculate_boost_loss(
     double new_k = k + delta_k;
     double new_theta = theta + delta_theta;
     double raw_k, raw_theta;
-    transform_param(k, theta, 0, &raw_k, &raw_theta, nullptr);
+    transform_param(new_k, new_theta, 0, &raw_k, &raw_theta, nullptr);
     // double raw_k = exp(new_k);
     // double raw_theta = exp(new_theta);
     // if (Utility::check_double_le(new_k, 0) || std::isnan(new_k)) new_k = 1e-3;

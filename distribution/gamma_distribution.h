@@ -33,7 +33,7 @@ class GammaDistribution : public Distribution {
       double* first_moment, double* second_moment);
 
   bool init_param(double* p1, double* p2, double* p3) {
-    *p1 = 0.5;  // log_k
+    *p1 = 2.0;  // log_k
     *p2 = 1.0;  // log_theta
     return true;
   }

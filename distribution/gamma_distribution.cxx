@@ -1,7 +1,10 @@
 #include "gamma_distribution.h"
 
 DECLARE_double(min_prob);
-DECLARE_double(regularization_param);
+DECLARE_double(regularization_param1);
+DECLARE_double(regularization_param2);
+DECLARE_double(learning_rate1);
+DECLARE_double(learning_rate2);
 DECLARE_uint32(distribution_sample_point_num);
 DEFINE_double(gamma_k_lower_bound, 0, "");
 
@@ -157,13 +160,21 @@ bool GammaDistribution::calculate_boost_gradient(
     // double theta = exp(log_theta);
 
     double y = label_data[*iter];
-    double gradient_log_k = (log(y / theta) - boost::math::digamma(k)) * k;
+    double gradient_log_k = 
+       (log(y / theta) - boost::math::digamma(k)) * k
+        // + 2 * FLAGS_regularization_param1 * pow(k, -0.3) // good 0.68 at 4-th round
+        // + 2 * FLAGS_regularization_param2 * pow(k, 0.3)
+        // - (k < 1.0 ? 2 * FLAGS_regularization_param1 * log(k) : 2 * FLAGS_regularization_param2 * log(k))
+        // + 2 * FLAGS_regularization_param2 * log(k)
+        // - 2 * FLAGS_regularization_param1 * log(k)
+        - 2 * FLAGS_regularization_param1 * log(k / FLAGS_regularization_param2)
+        ;
     double gradient_log_theta = (y / pow(theta, 2) - k / theta) * theta;
     sum_gradient_k += gradient_log_k;
     sum_gradient_theta += gradient_log_theta;
   }
-  double gradient_k = sum_gradient_k * FLAGS_regularization_param;
-  double gradient_theta = sum_gradient_theta * FLAGS_regularization_param;
+  double gradient_k = sum_gradient_k * FLAGS_learning_rate1;
+  double gradient_theta = sum_gradient_theta * FLAGS_learning_rate2;
   if (g_p1 != nullptr) *g_p1 = gradient_k / record_index_vec.size();
   if (g_p2 != nullptr) *g_p2 = gradient_theta / record_index_vec.size();
   return true;
@@ -221,8 +232,8 @@ bool _calculate_boost_gradient(
     // double p_theta = boost::math::pdf(dist_delta_theta, label_data[*iter] + delta);
     // sum_gradient_theta += log(p_theta / p0) / delta;
   }
-  double gradient_k = sum_gradient_k * FLAGS_regularization_param;
-  double gradient_theta = sum_gradient_theta * FLAGS_regularization_param;
+  double gradient_k = sum_gradient_k * FLAGS_learning_rate1;
+  double gradient_theta = sum_gradient_theta * FLAGS_learning_rate2;
   if (g_p1 != nullptr) *g_p1 = gradient_k / record_index_vec.size();
   if (g_p2 != nullptr) *g_p2 = gradient_theta / record_index_vec.size();
   return true;

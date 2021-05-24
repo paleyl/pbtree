@@ -4,7 +4,10 @@
 #include "normal_distribution.h"
 
 DEFINE_uint32(distribution_sample_point_num, 100, "");
-DEFINE_double(regularization_param, 0.1, "");
+DEFINE_double(regularization_param1, 0.01, "");
+DEFINE_double(regularization_param2, 0.01, "");
+DEFINE_double(learning_rate1, 0.1, "");
+DEFINE_double(learning_rate2, 0.1, "");
 DEFINE_double(min_prob, 1e-100, "");
 DEFINE_double(min_value, 1e-100, "");
 DEFINE_double(max_value, 1e+100, "");

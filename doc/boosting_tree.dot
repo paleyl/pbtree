@@ -1,0 +1,42 @@
+# dot2tex -tmath test3.dot > test3.tex;  latex --shell-escape test3.tex
+
+graph ""
+{
+#node [fontsize=10,width=".2", height=".2", margin=0];
+#graph[fontsize=8];
+label = "PBTree";
+
+  subgraph t0 
+  {
+  label="t0"
+  node0 [label = "initial \n  value"];
+  node0 -- leaf0;
+  leaf0 [texlbl="$\theta_0, k_0$"];
+  }
+
+  subgraph t1
+  {
+
+  label="tree1"
+
+  node1 [label = "tree1"];
+  node1 -- leaf1;
+  leaf1 [texlbl="$\Delta \theta_{1, 1}, \Delta k_{1, 1}$"] ;
+  node1 -- leaf2;
+  leaf2 [texlbl="$\Delta \theta_{1, 2}, \Delta k_{1, 2}$"] ;
+
+  }
+
+  subgraph t2
+  {
+
+  label="tree2"
+
+  node2 [label = "tree2"];
+  node2 -- leaf5;
+  leaf5 [texlbl="$\Delta \theta_{2, 1}, \Delta k_{2, 1}$"] ;
+  node2 -- leaf6;
+  leaf6 [texlbl="$\Delta \theta_{2, 2}, \Delta k_{2, 2}$"] ;
+  }
+
+}

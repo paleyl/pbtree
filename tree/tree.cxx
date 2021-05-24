@@ -22,7 +22,7 @@ DEFINE_double(upper_confidence_interval, 0.8, "");
 DEFINE_double(feature_non_zero_convert_ratio, 0.003, "");
 DEFINE_bool(evaluate_loss_every_node, false, "");
 DEFINE_double(record_min_ratio, 5e-3, "");
-DEFINE_uint32(trim_feature_batch_size, 1000, "");
+DEFINE_uint32(filter_feature_batch_size, 1000, "");
 DEFINE_bool(use_multi_thread_filter, true, "");
 
 // TODO(paleylv): develop pthread strategy
@@ -510,7 +510,7 @@ bool Tree::check_valid_candidate(
   // Multi-thread implementation
   std::vector<uint64_t> result_vec;
   result_vec.resize(pre_filter_feature_vec.size());
-  uint32_t batch_size = FLAGS_trim_feature_batch_size;
+  uint32_t batch_size = FLAGS_filter_feature_batch_size;
   for (auto iter_feature = pre_filter_feature_vec.begin();
       iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
     auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?

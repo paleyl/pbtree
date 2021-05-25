@@ -1,3 +1,13 @@
+---
+html:
+  embed_local_images: true
+  embed_svg: true
+  offline: false
+  toc: undefined
+
+print_background: false
+---
+
 ## Probabilistic Boosting Tree
 
 ### 背景

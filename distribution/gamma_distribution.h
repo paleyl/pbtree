@@ -32,11 +32,7 @@ class GammaDistribution : public Distribution {
       const std::tuple<double, double, double>& param,
       double* first_moment, double* second_moment);
 
-  bool init_param(double* p1, double* p2, double* p3) {
-    *p1 = 2.0;  // log_k
-    *p2 = 1.0;  // log_theta
-    return true;
-  }
+  bool init_param(double* p1, double* p2, double* p3);
 
   bool calculate_boost_loss(
       const std::vector<double>& label_data,

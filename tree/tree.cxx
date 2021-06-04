@@ -24,6 +24,9 @@ DEFINE_bool(evaluate_loss_every_node, false, "");
 DEFINE_double(record_min_ratio, 5e-3, "");
 DEFINE_uint32(filter_feature_batch_size, 1000, "");
 DEFINE_bool(use_multi_thread_filter, true, "");
+DEFINE_uint32(alter_coord_round, 5, "");
+DECLARE_double(learning_rate1);
+DECLARE_double(learning_rate2);
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
@@ -786,7 +789,18 @@ bool Tree::build_tree() {
     record_index_vec.push_back(i);
   }
   ModelManager model_manager;
+  double learning_rate1 = FLAGS_learning_rate1;
+  double learning_rate2 = FLAGS_learning_rate2;
   for (unsigned int i = 0; i < FLAGS_training_round; ++i) {
+    if (i % FLAGS_alter_coord_round == 0) {
+      if (i % (2 * FLAGS_alter_coord_round) == 0) {
+        FLAGS_learning_rate1 = learning_rate1;
+        FLAGS_learning_rate2 = 0;
+      } else {
+        FLAGS_learning_rate1 = 0;
+        FLAGS_learning_rate2 = learning_rate2;
+      }
+    }
     PBTree_Node* root = m_pbtree_ptr_->add_tree();
     std::vector<uint64_t> train_index_vec;
     if (Utility::check_double_equal(FLAGS_train_record_sample_ratio, 1.0)) {
@@ -799,7 +813,9 @@ bool Tree::build_tree() {
         }
       }
     }
-    LOG(INFO) << "Begin training round " << i << " with " << train_index_vec.size() << " instances";
+    LOG(INFO) << "Begin training round " << i << " with " << train_index_vec.size() << " instances"
+              << ", learning_rate1 = " << FLAGS_learning_rate1
+              << ", learning_rate2 = " << FLAGS_learning_rate2;
     create_node(train_index_vec, 0/*node level*/, root);
     if ((i + 1) % FLAGS_save_temp_model_round == 0) {
       std::string temp_output_model_path = FLAGS_output_model_path + ".temp_round_" + std::to_string(i);

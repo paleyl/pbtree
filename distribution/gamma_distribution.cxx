@@ -7,8 +7,16 @@ DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
 DECLARE_uint32(distribution_sample_point_num);
 DEFINE_double(gamma_k_lower_bound, 0, "");
+DEFINE_double(gamma_init_p1, 2.0, "");
+DEFINE_double(gamma_init_p2, 1.0, "");
 
 namespace pbtree {
+
+bool GammaDistribution::init_param(double* p1, double* p2, double* p3) {
+  *p1 = FLAGS_gamma_init_p1;  // log_k
+  *p2 = FLAGS_gamma_init_p2;  // log_theta
+  return true;
+}
 
 bool GammaDistribution::transform_param(
     const double& raw_p1, const double& raw_p2, const double& raw_p3,

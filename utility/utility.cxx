@@ -47,7 +47,7 @@ bool Utility::check_double_equal(const double& a, const double& b) {
 }
 
 bool Utility::check_double_le(const double& a, const double& b) {  // less or equal
-  if (a - b < 1e-10)
+  if (a - b < 1e-50)
     return true;
   else
     return false;

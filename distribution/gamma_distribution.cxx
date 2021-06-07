@@ -9,6 +9,7 @@ DECLARE_uint32(distribution_sample_point_num);
 DEFINE_double(gamma_k_lower_bound, 0, "");
 DEFINE_double(gamma_init_p1, 2.0, "");
 DEFINE_double(gamma_init_p2, 1.0, "");
+DEFINE_uint64(gamma_alter_round, 10, "");
 
 namespace pbtree {
 
@@ -316,6 +317,25 @@ bool GammaDistribution::predict_interval(
   boost::math::gamma_distribution<double> dist(p1, p2);
   *lower_bound = boost::math::quantile(dist, lower_interval);
   *upper_bound = boost::math::quantile(dist, upper_interval);
+  return true;
+}
+
+bool GammaDistribution::get_learning_rate(
+      const uint64_t& round,
+      const double& initial_p1_learning_rate,
+      const double& initial_p2_learning_rate,
+      const double& initial_p3_learning_rate,
+      double* p1_learning_rate,
+      double* p2_learning_rate, double* p3_learning_rate) {
+  if (round % FLAGS_gamma_alter_round == 0) {
+    if (round % (2 * FLAGS_gamma_alter_round) == 0) {
+      *p1_learning_rate = 0;
+      *p2_learning_rate = initial_p2_learning_rate;
+    } else {
+      *p1_learning_rate = initial_p1_learning_rate;
+      *p2_learning_rate = 0;
+    }
+  }
   return true;
 }
 

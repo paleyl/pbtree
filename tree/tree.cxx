@@ -39,14 +39,12 @@ bool Tree::init() {
       num_cpu_cores * 2 / 3 : FLAGS_thread_num;
   m_thread_pool_ptr_ = std::shared_ptr<ThreadPool>(
       new ThreadPool(thread_num));
-  init_pred_dist_vec();
   return true;
 }
 
-bool Tree::init_pred_dist_vec() {
+bool Tree::init_pred_dist_vec(
+    const double& p1, const double& p2, const double& p3) {
   std::vector<std::tuple<double, double, double>> pred_param_vec;
-  double p1 = 0, p2 = 0, p3 = 0;
-  m_distribution_ptr_->init_param(&p1, &p2, &p3);
   auto init_param = std::make_tuple(p1, p2, p3);
   pred_param_vec.reserve(m_label_data_ptr_->size());
   for (unsigned int i = 0; i < m_label_data_ptr_->size(); ++i) {
@@ -109,8 +107,7 @@ bool Tree::boost_predict_data_set(
   pred_moment_vec->reserve(matrix.size2());
   pred_interval_vec->reserve(matrix.size2());
   for (unsigned long i = 0; i < matrix.size2(); ++i) {  // Assumed column major
-    double p1 = 0, p2 = 0, p3 = 0;
-    dist->init_param(&p1, &p2, &p3);
+    double p1 = m_pbtree_ptr_->init_p1(), p2 = m_pbtree_ptr_->init_p2(), p3 = m_pbtree_ptr_->init_p3();
     for (int j = 0; j < m_pbtree_ptr_->tree_size(); ++j) {
       boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &p1, &p2, &p3);
       VLOG(102) << "Round " << j << " param: (" << p1 << "," << p2 << ")";
@@ -791,16 +788,15 @@ bool Tree::build_tree() {
   ModelManager model_manager;
   double learning_rate1 = FLAGS_learning_rate1;
   double learning_rate2 = FLAGS_learning_rate2;
+  double init_p1 = 0, init_p2 = 0, init_p3 = 0;
+  m_distribution_ptr_->init_param(&init_p1, &init_p2, &init_p3);
+  m_pbtree_ptr_->set_init_p1(init_p1);
+  m_pbtree_ptr_->set_init_p2(init_p2);
+  m_pbtree_ptr_->set_init_p3(init_p3);
+  init_pred_dist_vec(init_p1, init_p2, init_p3);
   for (unsigned int i = 0; i < FLAGS_training_round; ++i) {
-    if (i % FLAGS_alter_coord_round == 0) {
-      if (i % (2 * FLAGS_alter_coord_round) == 0) {
-        FLAGS_learning_rate1 = learning_rate1;
-        FLAGS_learning_rate2 = 0;
-      } else {
-        FLAGS_learning_rate1 = 0;
-        FLAGS_learning_rate2 = learning_rate2;
-      }
-    }
+    m_distribution_ptr_->get_learning_rate(i, learning_rate1, learning_rate2, 0,
+        &FLAGS_learning_rate1, &FLAGS_learning_rate2, nullptr);
     PBTree_Node* root = m_pbtree_ptr_->add_tree();
     std::vector<uint64_t> train_index_vec;
     if (Utility::check_double_equal(FLAGS_train_record_sample_ratio, 1.0)) {

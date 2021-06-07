@@ -103,6 +103,14 @@ class Distribution {
       const double& p1, const double& p2, const double& p3,
       const double& lower_interval, const double& upper_upper_interval,
       double* lower_bound, double* upper_bound) = 0;
+
+  virtual bool get_learning_rate(
+      const uint64_t& round,
+      const double& initial_p1_learning_rate,
+      const double& initial_p2_learning_rate,
+      const double& initial_p3_learning_rate,
+      double* p1_learning_rate,
+      double* p2_learning_rate, double* p3_learning_rate) = 0;
 };
 
 class DistributionManager {

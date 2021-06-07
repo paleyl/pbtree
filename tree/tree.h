@@ -32,7 +32,8 @@ class Tree {
 
   bool init();
 
-  bool init_pred_dist_vec();
+  bool init_pred_dist_vec(
+      const double& p1, const double& p2, const double& p3);
 
   bool predict(
       const boost::numeric::ublas::matrix_row<

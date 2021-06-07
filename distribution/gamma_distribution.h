@@ -48,10 +48,10 @@ class GammaDistribution : public Distribution {
       double* g_p1, double* g_p2, double* g_p3);
 
   bool set_boost_node_param(
-    const std::vector<double>& label_data,
-    const std::vector<uint64_t>& row_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
-    PBTree_Node* node);
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& row_index_vec,
+      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      PBTree_Node* node);
 
   bool transform_param(
       const double& raw_p1, const double& raw_p2, const double& raw_p3,
@@ -66,6 +66,14 @@ class GammaDistribution : public Distribution {
   //     const std::vector<uint64_t>& record_index_vec,
   //     const std::vector<std::tuple<double, double, double>>& predicted_paramm,
   //     double* rmsle);
+
+  bool get_learning_rate(
+      const uint64_t& round,
+      const double& initial_p1_learning_rate,
+      const double& initial_p2_learning_rate,
+      const double& initial_p3_learning_rate,
+      double* p1_learning_rate,
+      double* p2_learning_rate, double* p3_learning_rate);
 
   void print_version() {
     VLOG(202) << "Gamma distribution";

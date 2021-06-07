@@ -101,3 +101,11 @@ For i in (1 to F):
         if (loss < min_loss):
             best_split = i, j
 ```
+```
+if (act_count > threshold):
+    avg_bid = cost / act_cnt
+    min_bid = avg_bid * 0.66
+    max_bid = avg_bid * 1.66
+else:
+    go_to_upper_level
+```

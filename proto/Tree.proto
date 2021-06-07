@@ -11,15 +11,18 @@ message PBTree {
 
   message Node {
     required int32 level = 1;
-    optional Node left_child = 2;
-    optional Node right_child = 3;
-    optional int64 split_feature_index = 4;
-    optional double split_feature_value = 5;
-    optional DistributionType distribution_type = 6;
-    optional double p1 = 7;
-    optional double p2 = 8;
-    optional double p3 = 9;
-    optional double loss = 10;
+    optional int64 split_feature_index = 2;
+    optional double split_feature_value = 3;
+    optional DistributionType distribution_type = 4;
+    optional double p1 = 5;
+    optional double p2 = 6;
+    optional double p3 = 7;
+    optional double loss = 8;
+    optional Node left_child = 9;
+    optional Node right_child = 10;
   }
   repeated Node tree = 1;
+  optional double init_p1 = 2;
+  optional double init_p2 = 3;
+  optional double init_p3 = 4;
 }

@@ -81,6 +81,16 @@ class NormalDistribution : public Distribution {
   //     const std::vector<uint64_t>& record_index_vec,
   //     const std::vector<std::tuple<double, double, double>>& predicted_param,
   //     double* rmsle);
+  bool get_learning_rate(
+      const uint64_t& round,
+      const double& initial_p1_learning_rate,
+      const double& initial_p2_learning_rate,
+      const double& initial_p3_learning_rate,
+      double* p1_learning_rate,
+      double* p2_learning_rate, double* p3_learning_rate) {
+    LOG(FATAL) << "Not implemented yet";
+    return true;
+  }
 
   void print_version() {
     VLOG(202) << "Normal distribution";

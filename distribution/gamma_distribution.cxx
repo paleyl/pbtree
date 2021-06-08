@@ -283,7 +283,8 @@ bool GammaDistribution::calculate_boost_loss(
     if (prob < FLAGS_min_prob) {
       prob = FLAGS_min_prob;
     }
-    double log_loss = log(prob);
+    double log_loss = log(prob)
+        - FLAGS_regularization_param1 * pow(log(raw_k / FLAGS_regularization_param2), 2);
     if (std::isinf(prob) || std::isinf(log_loss)) {
       LOG(WARNING) << "Raw_k = " << raw_k << ", raw_theta = " << raw_theta
                    << ", label = " << label_data[*iter]
@@ -327,14 +328,21 @@ bool GammaDistribution::get_learning_rate(
       const double& initial_p3_learning_rate,
       double* p1_learning_rate,
       double* p2_learning_rate, double* p3_learning_rate) {
-  if (round % FLAGS_gamma_alter_round == 0) {
-    if (round % (2 * FLAGS_gamma_alter_round) == 0) {
-      *p1_learning_rate = 0;
-      *p2_learning_rate = initial_p2_learning_rate;
-    } else {
-      *p1_learning_rate = initial_p1_learning_rate;
-      *p2_learning_rate = 0;
-    }
+  // if (round % FLAGS_gamma_alter_round == 0) {
+  //   if (round % (2 * FLAGS_gamma_alter_round) == 0) {
+  //     *p1_learning_rate = 0;
+  //     *p2_learning_rate = initial_p2_learning_rate;
+  //   } else {
+  //     *p1_learning_rate = initial_p1_learning_rate;
+  //     *p2_learning_rate = 0;
+  //   }
+  // }
+  if (round < FLAGS_gamma_alter_round) {
+    *p1_learning_rate = 0;
+    *p2_learning_rate = initial_p2_learning_rate;
+  } else {
+    *p1_learning_rate = initial_p1_learning_rate;
+    *p2_learning_rate = initial_p2_learning_rate;
   }
   return true;
 }

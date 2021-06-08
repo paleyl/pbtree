@@ -13,9 +13,8 @@ namespace pbtree {
 
 bool AnalysisManager::init_pred_dist_vec() {
   std::vector<std::tuple<double, double, double>> pred_param_vec;
-  double p1 = 0, p2 = 0, p3 = 0;
+  double p1 = m_pbtree_ptr_->init_p1(), p2 = m_pbtree_ptr_->init_p2(), p3 = m_pbtree_ptr_->init_p3();
   auto dist = DistributionManager::get_distribution((*m_pbtree_ptr_).tree(0).distribution_type());
-  dist->init_param(&p1, &p2, &p3);
   auto init_param = std::make_tuple(p1, p2, p3);
   for (unsigned int i = 0; i < m_label_vec_ptr_->size(); ++i) {
     pred_param_vec.push_back(init_param);
@@ -131,12 +130,16 @@ bool AnalysisManager::draw_one_node(
     std::shared_ptr<pbtree::Distribution> distribution_ptr =
         DistributionManager::get_distribution(node.distribution_type());
     std::string curve_str;
-    double p1 = 0, p2 = 0, p3 = 0;
+    double p1 = node.p1(), p2 = node.p2(), p3 = node.p3();
+    // double raw_p1 = node.p1(), raw_p2 = node.p2(), raw_p3 = node.p3();
     if (FLAGS_boosting_mode) {
-      distribution_ptr->init_param(&p1, &p2, &p3);
+      double raw_p1 = node.p1() + m_pbtree_ptr_->init_p1();
+      double raw_p2 = node.p2() + m_pbtree_ptr_->init_p2();
+      double raw_p3 = node.p3() + m_pbtree_ptr_->init_p3();
+      distribution_ptr->transform_param(raw_p1, raw_p2, raw_p3, &p1, &p2, &p3);
     }
 //    double raw_p1 = node.p1() + 
-    distribution_ptr->plot_distribution_curve(node.p1() + p1, node.p2() + p2, node.p3() + p3, &curve_str);
+    distribution_ptr->plot_distribution_curve(p1, p2, p3, &curve_str);
     std::ofstream curve_file;
     std::string curve_file_name = FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_curve_file.txt";

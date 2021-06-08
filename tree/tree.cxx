@@ -27,6 +27,7 @@ DEFINE_bool(use_multi_thread_filter, true, "");
 DEFINE_uint32(alter_coord_round, 5, "");
 DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
+DEFINE_string(burned_model_path, "", "");
 
 // TODO(paleylv): develop pthread strategy
 // TODO(paleylv): add min gain ratio threshold
@@ -786,6 +787,11 @@ bool Tree::build_tree() {
     record_index_vec.push_back(i);
   }
   ModelManager model_manager;
+  // if (!FLAGS_burned_model_path.empty()) {
+  //   model_manager.load_tree_model(FLAGS_burned_model_path, &m_pbtree_ptr_);
+  // } else {
+  //   m_pbtree_ptr_ = std::make_shared<pbtree::PBTree>(new pbtree::PBTree());
+  // }
   double learning_rate1 = FLAGS_learning_rate1;
   double learning_rate2 = FLAGS_learning_rate2;
   double init_p1 = 0, init_p2 = 0, init_p3 = 0;

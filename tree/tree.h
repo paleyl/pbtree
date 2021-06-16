@@ -107,6 +107,13 @@ class Tree {
       const std::vector<uint64_t>* record_inded_vec_ptr,
       uint64_t* num);
 
+  void do_intersection1(
+      const std::vector<uint64_t>* record_index_vec_ptr,
+      const std::vector<uint64_t>* pre_filtered_feature_vec_ptr,
+      const uint32_t& begin_index,
+      const uint32_t& end_index,
+      std::vector<uint64_t>* result_vec_ptr);
+
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;

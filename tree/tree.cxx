@@ -23,14 +23,15 @@ DEFINE_double(feature_non_zero_convert_ratio, 0.003, "");
 DEFINE_bool(evaluate_loss_every_node, false, "");
 DEFINE_double(record_min_ratio, 5e-3, "");
 DEFINE_uint32(filter_feature_batch_size, 1000, "");
-DEFINE_bool(use_multi_thread_filter, true, "");
+DEFINE_bool(use_multi_thread_filter, false, "");
 DEFINE_uint32(alter_coord_round, 5, "");
 DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
 DEFINE_string(burned_model_path, "", "");
 
-// TODO(paleylv): develop pthread strategy
-// TODO(paleylv): add min gain ratio threshold
+// TODO(paleylv): current thread pool is not stable, 
+// use_multi_thread_filter should be false to avoid crash
+// use boost thread pool to replace current version.
 namespace pbtree {
 
 bool Tree::init() {
@@ -199,12 +200,12 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
     else 
       check_valid_candidate(record_index_vec, *m_valid_split_feature_vec_ptr_, &candidate_feature_vec);
     candidate_feature_vec_ptr = &candidate_feature_vec;
+    LOG(INFO) << "Level " << level
+              << ", parents candidate_feature_num "
+              << std::to_string(parents_feature_vec_ptr ? parents_feature_vec_ptr->size() : 0)
+              << ", v.s. all valid feature " << m_valid_split_feature_vec_ptr_->size()
+              << ", after filter candidate_feature_vec size = " << candidate_feature_vec.size();
   }
-  LOG(INFO) << "Level " << level
-            << ", parents candidate_feature_num "
-            << std::to_string(parents_feature_vec_ptr ? parents_feature_vec_ptr->size() : 0)
-            << ", v.s. all valid feature " << m_valid_split_feature_vec_ptr_->size()
-            << ", after filter candidate_feature_vec size = " << candidate_feature_vec.size();
   // if (Utility::check_double_le(current_loss, 0)) {
   //   LOG(INFO) << "Level " << level << " loss = " << current_loss << ", already converged";
   //   return true;
@@ -298,6 +299,7 @@ bool Tree::find_all_feature_split(
   if (record_index_vec.size() < FLAGS_split_min_count) {
     return false;
   }
+  if (candidate_feature_vec && candidate_feature_vec->size() == 0) {return false;}
   std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
   // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
   //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
@@ -462,6 +464,31 @@ bool Tree::check_split_histogram(const uint64_t& feature_index) {
   return true;
 }
 
+void Tree::do_intersection1(
+    const std::vector<uint64_t>* record_index_vec_ptr,
+    const std::vector<uint64_t>* pre_filtered_feature_vec_ptr,
+    const uint32_t& begin_index,
+    const uint32_t& end_index,
+    std::vector<uint64_t>* result_vec_ptr) {
+  std::vector<uint64_t> vec(record_index_vec_ptr->size() + m_max_non_zero_per_feature_);
+  for (unsigned int i = begin_index; i < end_index; ++i) {
+    auto tmp_non_zero_vec_iter = m_non_zero_value_map_ptr_->find((*pre_filtered_feature_vec_ptr)[i]);
+    if (tmp_non_zero_vec_iter == m_non_zero_value_map_ptr_->end()) {
+      std::cout << "Feature " << (*pre_filtered_feature_vec_ptr)[i] << " not found in feature map" << std::endl;
+      for (unsigned j = begin_index; j < end_index; ++j) {
+        std::cout << "Previous feature vec[" << j << "]" << (*pre_filtered_feature_vec_ptr)[j] << std::endl;
+      }
+      continue;
+    }
+    auto iter = std::set_intersection(
+        tmp_non_zero_vec_iter->second.begin(),
+        tmp_non_zero_vec_iter->second.end(),
+        record_index_vec_ptr->begin(), record_index_vec_ptr->end(), vec.begin());
+    (*result_vec_ptr)[i] = iter - vec.begin();
+  }
+  return;
+}
+
 void Tree::do_intersection(
     const std::vector<uint64_t>::const_iterator& iter_begin,
     const std::vector<uint64_t>::const_iterator& iter_end,
@@ -512,18 +539,28 @@ bool Tree::check_valid_candidate(
   std::vector<uint64_t> result_vec;
   result_vec.resize(pre_filter_feature_vec.size());
   uint32_t batch_size = FLAGS_filter_feature_batch_size;
-  for (auto iter_feature = pre_filter_feature_vec.begin();
-      iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
-    auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?
-        iter_feature + batch_size : pre_filter_feature_vec.end();
-    m_thread_pool_ptr_->do_job(
-        std::bind(&Tree::do_intersection, this,
-        iter_feature,
-        current_turn_end,
+  for (unsigned int i = 0; i < pre_filter_feature_vec.size(); i += batch_size) {
+    unsigned int j = i + batch_size < pre_filter_feature_vec.size() ?
+        i + batch_size : pre_filter_feature_vec.size();
+    m_thread_pool_ptr_->do_job(std::bind(
+        &Tree::do_intersection1, this,
         &record_index_vec,
-        &(result_vec[iter_feature - pre_filter_feature_vec.begin()])
+        &pre_filter_feature_vec,
+        i, j, &result_vec
     ));
   }
+  // for (auto iter_feature = pre_filter_feature_vec.begin();
+  //     iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
+  //   auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?
+  //       iter_feature + batch_size : pre_filter_feature_vec.end();
+  //   m_thread_pool_ptr_->do_job(
+  //       std::bind(&Tree::do_intersection, this,
+  //       iter_feature,
+  //       current_turn_end,
+  //       &record_index_vec,
+  //       &(result_vec[iter_feature - pre_filter_feature_vec.begin()])
+  //   ));
+  // }
   while (!m_thread_pool_ptr_->is_finished()) {/*Just wait for finishing*/}
   for (unsigned long i = 0; i < pre_filter_feature_vec.size(); ++i) {
     if (result_vec[i] >= FLAGS_split_min_count) {

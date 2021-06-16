@@ -2,7 +2,8 @@
 #include <stdlib.h>
 
 #include <chrono> 
-
+#include "boost/asio/thread_pool.hpp"
+#include "boost/asio/post.hpp"
 #include "tree.h"
 
 DEFINE_uint32(histogram_bin_count, 100, "Number of bins in histogram");
@@ -349,14 +350,20 @@ bool Tree::find_all_feature_split(
         ++candidate_feature_num;
       }
     }
+    boost::asio::thread_pool pool(FLAGS_thread_num);
     for (unsigned int i = 0; i < candidate_split_vec.size(); ++i) {
       uint64_t feature_index = candidate_split_vec[i].first;
-        m_thread_pool_ptr_->do_job(std::bind(
+        // m_thread_pool_ptr_->do_job(std::bind(
+        //     &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
+        //     &(candidate_split_vec[i].second.first),
+        //     &(candidate_split_vec[i].second.second)));
+      boost::asio::post(pool, std::bind(
             &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
             &(candidate_split_vec[i].second.first),
-            &(candidate_split_vec[i].second.second)));    
+            &(candidate_split_vec[i].second.second)));
     }
-
+    pool.join();
+    pool.stop();
     // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
     //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
     //   uint64_t candidate_index = i;
@@ -389,16 +396,16 @@ bool Tree::find_all_feature_split(
     //       &(tmp_candidate_split_vec[candidate_index].second.first),
     //       &(tmp_candidate_split_vec[candidate_index].second.second)));
     // }
-    while (// !m_thread_pool_ptr_->is_jobs_queue_empty()
+    // while (// !m_thread_pool_ptr_->is_jobs_queue_empty()
            //|| m_thread_pool_ptr_->is_working()
-           !m_thread_pool_ptr_->is_finished()
-    ) {
+    //       !m_thread_pool_ptr_->is_finished()
+    // ) {
       // usleep(1000);
       // std::this_thread::sleep_for(std::chrono::seconds(1));
       // std::cout << "Queue size = " << m_thread_pool_ptr_->get_jobs_queue_size() << std::endl;
       // std::cout << m_thread_pool_ptr_->get_worker_status() << std::endl;
       // Loop and waiting
-    }
+    // }
     // candidate_split_vec.push_back(tmp_candidate_split_vec[best_split_feature_index]);
     // for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
     //   uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
@@ -536,19 +543,28 @@ bool Tree::check_valid_candidate(
     return true;
   }
   // Multi-thread implementation
+  boost::asio::thread_pool pool(FLAGS_thread_num);
   std::vector<uint64_t> result_vec;
   result_vec.resize(pre_filter_feature_vec.size());
   uint32_t batch_size = FLAGS_filter_feature_batch_size;
   for (unsigned int i = 0; i < pre_filter_feature_vec.size(); i += batch_size) {
     unsigned int j = i + batch_size < pre_filter_feature_vec.size() ?
         i + batch_size : pre_filter_feature_vec.size();
-    m_thread_pool_ptr_->do_job(std::bind(
+    // m_thread_pool_ptr_->do_job(std::bind(
+    //     &Tree::do_intersection1, this,
+    //     &record_index_vec,
+    //     &pre_filter_feature_vec,
+    //     i, j, &result_vec
+    // ));
+    boost::asio::post(pool, std::bind(
         &Tree::do_intersection1, this,
         &record_index_vec,
         &pre_filter_feature_vec,
         i, j, &result_vec
     ));
   }
+  pool.join();
+  pool.stop();
   // for (auto iter_feature = pre_filter_feature_vec.begin();
   //     iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
   //   auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?
@@ -561,7 +577,7 @@ bool Tree::check_valid_candidate(
   //       &(result_vec[iter_feature - pre_filter_feature_vec.begin()])
   //   ));
   // }
-  while (!m_thread_pool_ptr_->is_finished()) {/*Just wait for finishing*/}
+  //        while (!m_thread_pool_ptr_->is_finished()) {/*Just wait for finishing*/}
   for (unsigned long i = 0; i < pre_filter_feature_vec.size(); ++i) {
     if (result_vec[i] >= FLAGS_split_min_count) {
       candidate_feature_vec->push_back(pre_filter_feature_vec[i]);

@@ -122,33 +122,43 @@ bool NormalDistribution::calculate_boost_gradient(
   return true;
 }
 
+// bool NormalDistribution::calculate_boost_loss(
+//     const std::vector<double>& label_data,
+//     const std::vector<uint64_t>& record_index_vec,
+//     const std::vector<std::tuple<double, double, double>>& predicted_param,
+//     double* loss,
+//     const bool& evaluation) {
+//   double mean = 0;
+//   double variance = 0;
+//   calc_sample_moment(label_data, record_index_vec, &mean, &variance);
+//   double mu_likelihood = mean;
+//   double sigma_likelihood = sqrt(variance);
+
+//   double tmp_loss = 0;
+//   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
+//     auto param = predicted_param[*iter];
+//     double mu_prior = std::get<0>(param);
+//     double sigma_prior = std::get<1>(param);
+//     // Refer to https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html
+//     double mu_posterior = mu_prior * pow(sigma_likelihood, 2) +
+//         mu_likelihood * pow(sigma_prior, 2);
+//     double sigma_posterior = pow(sigma_likelihood, 2) * pow(sigma_prior, 2) /
+//         (pow(sigma_likelihood, 2) + pow(sigma_prior, 2));
+//     sigma_posterior = sqrt(sigma_posterior);
+//     boost::math::gamma_distribution<double> dist_posterior(mu_posterior, sigma_posterior);
+//     tmp_loss += log(boost::math::pdf(dist_posterior, label_data[*iter]));
+//   }
+//   *loss = tmp_loss * -1 / record_index_vec.size();
+//   return true;
+// }
+
 bool NormalDistribution::calculate_boost_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
     const std::vector<std::tuple<double, double, double>>& predicted_param,
     double* loss,
     const bool& evaluation) {
-  double mean = 0;
-  double variance = 0;
-  calc_sample_moment(label_data, record_index_vec, &mean, &variance);
-  double mu_likelihood = mean;
-  double sigma_likelihood = sqrt(variance);
-
-  double tmp_loss = 0;
-  for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
-    auto param = predicted_param[*iter];
-    double mu_prior = std::get<0>(param);
-    double sigma_prior = std::get<1>(param);
-    // Refer to https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html
-    double mu_posterior = mu_prior * pow(sigma_likelihood, 2) +
-        mu_likelihood * pow(sigma_prior, 2);
-    double sigma_posterior = pow(sigma_likelihood, 2) * pow(sigma_prior, 2) /
-        (pow(sigma_likelihood, 2) + pow(sigma_prior, 2));
-    sigma_posterior = sqrt(sigma_posterior);
-    boost::math::gamma_distribution<double> dist_posterior(mu_posterior, sigma_posterior);
-    tmp_loss += log(boost::math::pdf(dist_posterior, label_data[*iter]));
-  }
-  *loss = tmp_loss * -1 / record_index_vec.size();
+  
   return true;
 }
 

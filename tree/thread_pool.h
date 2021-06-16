@@ -21,9 +21,10 @@ class ThreadPool {
     m_threads_vec_.reserve(threads);
     for (int i = 0; i < threads; ++i)
       m_threads_vec_.emplace_back(std::bind(&ThreadPool::thread_entry, this, i));
-    for (int i = 0; i < threads; ++i) {
-      m_thread_working_vec_.push_back(0);
-    }
+    m_working_count_ = 0;
+    // for (int i = 0; i < threads; ++i) {
+    //   m_thread_working_vec_.push_back(0);
+    // }
   }
 
   ~ThreadPool() {
@@ -66,7 +67,8 @@ class ThreadPool {
   }
 
   bool is_finished() {
-    return !is_working() && is_jobs_queue_empty();
+    // return !is_working() && is_jobs_queue_empty();
+    return m_working_count_ == 0 && m_jobs_queue_.empty();
   }
 
   std::string get_worker_status() {
@@ -96,7 +98,8 @@ class ThreadPool {
         }
 
         // std::cout << "Thread " << i << " start a job" << std::endl;
-        m_thread_working_vec_[i] = 1;
+        // m_thread_working_vec_[i] = 1;
+        ++ m_working_count_;
         job = std::move(m_jobs_queue_.front());
         m_jobs_queue_.pop();
         
@@ -104,7 +107,11 @@ class ThreadPool {
 
       // Do the job without holding any locks
       job();
-      m_thread_working_vec_[i] = 0;
+      {
+        std::unique_lock<std::mutex> lock(m_lock_);
+        -- m_working_count_;
+      }
+      // m_thread_working_vec_[i] = 0;
       // std::cout << "Thread " << i << " finished a job, adress " << &(m_thread_working_vec_) << " " << get_worker_status() << std::endl;
     }
   }
@@ -143,6 +150,7 @@ class ThreadPool {
   //     double*)>> m_split_jobs_queue_;
   std::vector<std::thread> m_threads_vec_;
   std::vector<int> m_thread_working_vec_;
+  uint64_t m_working_count_;
 };
 
 }  // pbtree

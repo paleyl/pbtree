@@ -34,9 +34,9 @@ class NormalDistribution : public Distribution {
       double* first_moment, double* second_moment);
 
   bool init_param(double* p1, double* p2, double* p3) {
-    *p1 = 0.0;  // mu
-    *p2 = 1.0;  // sigma
-    return true;
+      *p1 = 0.0;  // mu
+      *p2 = 1.0;  // sigma
+      return true;
   }
 
   bool calculate_boost_loss(
@@ -56,10 +56,7 @@ class NormalDistribution : public Distribution {
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,
       const std::vector<std::tuple<double, double, double>>& predicted_param,
-      PBTree_Node* node) {
-    LOG(FATAL) << "Not implemented yet";
-    return true;
-  }
+      PBTree_Node* node);
 
   bool evaluate_rmse(
       const std::vector<double>& label_data,
@@ -68,13 +65,14 @@ class NormalDistribution : public Distribution {
     return true;
   }
 
+  bool transform_param(
+      const double& raw_p1, const double& raw_p2, const double& raw_p3,
+      double* p1, double* p2, double* p3);
+
   bool predict_interval(
       const double& p1, const double& p2, const double& p3,
       const double& lower_interval, const double& upper_upper_interval,
-      double* lower_bound, double* upper_bound) {
-    LOG(FATAL) << "Not implemented yet";
-    return true;
-  }
+      double* lower_bound, double* upper_bound);
 
   // bool evaluate_rmsle(
   //     const std::vector<double>& label_data,
@@ -87,10 +85,7 @@ class NormalDistribution : public Distribution {
       const double& initial_p2_learning_rate,
       const double& initial_p3_learning_rate,
       double* p1_learning_rate,
-      double* p2_learning_rate, double* p3_learning_rate) {
-    LOG(FATAL) << "Not implemented yet";
-    return true;
-  }
+      double* p2_learning_rate, double* p3_learning_rate);
 
   void print_version() {
     VLOG(202) << "Normal distribution";

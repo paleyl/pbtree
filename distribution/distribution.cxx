@@ -60,7 +60,7 @@ std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_Distr
   std::shared_ptr<Distribution> distribution_ptr;
   switch (type)
   {
-  case PBTree_DistributionType_NORMAL_DISTRIBUITION:
+  case PBTree_DistributionType_NORMAL_DISTRIBUTION:
     distribution_ptr = std::shared_ptr<Distribution>(new NormalDistribution());
     break;
   case PBTree_DistributionType_GAMMA_DISTRIBUTION:

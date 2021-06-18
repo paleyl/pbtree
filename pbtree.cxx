@@ -121,7 +121,8 @@ bool run_boost_predict() {
               << std::get<1>(pred_moment_vec[i]) << "), ("
               << std::get<0>(pred_param_vec[i]) << ","
               << std::get<1>(pred_param_vec[i]) << ")";
-    output_result_file << pred_interval_vec[i].first
+    output_result_file << label_data_vec[i]
+                       << "\t" << pred_interval_vec[i].first
                        << "\t" << pred_interval_vec[i].second
                        << "\t" << std::get<0>(pred_moment_vec[i])
                        << "\t" << std::get<1>(pred_moment_vec[i])
@@ -202,6 +203,7 @@ bool run_train() {
   // auto tmp = descriptor->FindValueByName(FLAGS_distribution_type)->index();
   pbtree::PBTree_DistributionType tmp_type = pbtree::PBTree_DistributionType_GAMMA_DISTRIBUTION;
   pbtree::PBTree_DistributionType_Parse(FLAGS_distribution_type, &tmp_type);
+  LOG(INFO) << tmp_type;
   std::shared_ptr<pbtree::Distribution> distribution_ptr =
       pbtree::DistributionManager::get_distribution(tmp_type);
   pbtree::PBTree pbtree;

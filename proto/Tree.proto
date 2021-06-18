@@ -4,7 +4,7 @@ package pbtree;
 message PBTree {
 
   enum DistributionType {
-    NORMAL_DISTRIBUITION = 0;
+    NORMAL_DISTRIBUTION = 0;
     GAMMA_DISTRIBUTION = 1;
     BINOMIAL_DISTRIBUTION = 2;
   }

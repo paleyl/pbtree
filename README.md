@@ -11,3 +11,4 @@ Distribution prediction model by Probability Boosting TREE method. This framewor
 - 支持工业界的应用：支持多线程训练、预估，支持在线服务。
 - 支持特征交叉。
 - 具有较好的解释性。
+![pbtree](./image/pbtree3_1.mdl.png)

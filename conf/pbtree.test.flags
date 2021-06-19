@@ -1,0 +1,11 @@
+--running_mode=boost_predict
+--log_dir=../log
+--v=101
+--logtostderr=0
+--input_model_path=../model/pbtree.gamma.mdl
+--input_test_data_path=../data/test_data.txt
+--distribution_type=GAMMA_DISTRIBUTION
+--boosting_mode=true
+--lower_confidence_interval=0.15
+--upper_confidence_interval=0.85
+--output_predict_result_path=../data/output_data_test.txt

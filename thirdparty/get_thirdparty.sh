@@ -1,6 +1,6 @@
 #!/bin/sh
 #sudo yum install gcc-c++ libstdc++-devel git cmake
-wget wget https://boostorg.jfrog.io/artifactory/main/release/1.75.0/source/boost_1_75_0.tar.gz
+wget https://boostorg.jfrog.io/artifactory/main/release/1.75.0/source/boost_1_75_0.tar.gz
 tar xzf boost_1_75_0.tar.gz
 git clone https://github.com/google/glog.git
 cd glog;git checkout c8f8135a5720aee7de8328b42e4c43f8aa2e60aa;mkdir build;cd build;cmake ..;make -j2;cd ../../

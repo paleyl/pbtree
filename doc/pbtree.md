@@ -1,7 +1,7 @@
 
-## Probabilistic Boosting Tree
+Probabilistic Boosting Tree
 
-### 背景
+# 背景
 
 在真实的机器学习问题中，我们有时不仅要预估目标的均值，还要对目标取值的置信区间进行预估。特别是样本量比较少的场景下，比如广告营销的成本管理、金融产品的定价等，行为频率低，样本获取的成本高昂，单次行为背后往往都有大额的资金成本。这类相对低频的问题往往需要较深的人工干预，预估其目标变量的分布将为商业决策行为提供更充分的参考和依据。
 
@@ -15,7 +15,7 @@
 
 对于我们要解决的生产场景下的成本、曝光、转化分布问题，目前暂无案例可供借鉴，也无成熟的框架可供使用，因此我们提出了Probabilistic Boosting Tree的框架。
 
-### 模型设计
+# 模型设计
 设$y$为要估计的变量，$x$是我们观测到的特征，我们需要计算目标变量$y$的分布，也即：$p(y|x)$。
 我们使用boosting tree的思路对目标进行估计。设树模型$T_1$的每个叶子节点$l_i$都是一个分布函数$p_{l_i}(y)$。那么单颗树模型可以表示为：
 
@@ -60,7 +60,7 @@ $i \in S_{m,l}$表示样本$i$在第$m$轮被划分到第$l$个叶子节点。
 
 $$\mathop{\arg\min}\limits_{S, \Theta, K}L_m$$
 
-### 求解
+# 求解
 
 $$L_m = -log(\prod_{i=1}^{n}{p(y_i|k_{m-1,i}+\Delta k_{m,l}, \theta_{m-1, i}+\Delta \theta _{m,l})})=-\sum_{i=1}^{n}log(p(y_i|k_{m-1,i}+\Delta k_{m,l}, \theta_{m-1, i}+\Delta \theta _{m, l}))
 $$
@@ -76,6 +76,7 @@ $$\Delta k_{m,l}=\eta_1 \frac{\partial L_m}{\partial k_{m-1,l}}$$
 
 $$\Delta \theta_{m,l}=\eta_2 \frac{\partial L_m}{\partial \theta_{m-1,l}}$$
 
+# 附录
 寻找分裂点的伪代码如下： 
 
 ```

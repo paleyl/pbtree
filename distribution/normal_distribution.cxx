@@ -24,15 +24,7 @@ bool NormalDistribution::calculate_loss(
     double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
   double mu = 0;
   double sigma = 0;
-  // double square_sum = 0;
-  // // Compute mu and sigma
-  // for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
-  //   mu += label_data[*iter];
-  //   square_sum += label_data[*iter] * label_data[*iter];
-  // }
-  // mu /= row_index_vec.size();
-  // E(X^2) - (EX)^2
-  // double variance = square_sum / row_index_vec.size() - mu * mu;
+
   double variance = 0;
   calc_sample_moment(label_data, row_index_vec, &mu, &variance);
   if (!Utility::check_double_le(0, variance)) {
@@ -49,9 +41,7 @@ bool NormalDistribution::calculate_loss(
   for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
     tmp_loss += log(boost::math::pdf(dist, label_data[*iter]));
   }
-  // for (auto iter = row_index_vec.begin(); iter < row_index_vec.end(); ++iter) {
-  //   tmp_loss += (mu - label_data[*iter]) * (mu - label_data[*iter]);
-  // }
+
   *loss = tmp_loss * -1 / row_index_vec.size();
   if (p1 != nullptr) *p1 = mu;
   if (p2 != nullptr) *p2 = sigma;
@@ -65,8 +55,7 @@ bool NormalDistribution::set_boost_node_param(
     PBTree_Node* node) {
   double delta_mu = 0, delta_sigma = 0;
   calculate_boost_gradient(label_data, row_index_vec, predicted_param, &delta_mu, &delta_sigma, nullptr);
-  // if (Utility::check_double_le(delta_k, 0)) delta_k = 1e-3;
-  // if (Utility::check_double_le(delta_theta, 0)) delta_theta = 1e-3;
+
   node->set_p1(delta_mu);
   node->set_p2(delta_sigma);
   node->set_distribution_type(PBTree_DistributionType_NORMAL_DISTRIBUTION);
@@ -173,36 +162,6 @@ bool NormalDistribution::calculate_boost_gradient(
   return true;
 }
 
-// bool NormalDistribution::calculate_boost_loss(
-//     const std::vector<double>& label_data,
-//     const std::vector<uint64_t>& record_index_vec,
-//     const std::vector<std::tuple<double, double, double>>& predicted_param,
-//     double* loss,
-//     const bool& evaluation) {
-//   double mean = 0;
-//   double variance = 0;
-//   calc_sample_moment(label_data, record_index_vec, &mean, &variance);
-//   double mu_likelihood = mean;
-//   double sigma_likelihood = sqrt(variance);
-
-//   double tmp_loss = 0;
-//   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
-//     auto param = predicted_param[*iter];
-//     double mu_prior = std::get<0>(param);
-//     double sigma_prior = std::get<1>(param);
-//     // Refer to https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html
-//     double mu_posterior = mu_prior * pow(sigma_likelihood, 2) +
-//         mu_likelihood * pow(sigma_prior, 2);
-//     double sigma_posterior = pow(sigma_likelihood, 2) * pow(sigma_prior, 2) /
-//         (pow(sigma_likelihood, 2) + pow(sigma_prior, 2));
-//     sigma_posterior = sqrt(sigma_posterior);
-//     boost::math::gamma_distribution<double> dist_posterior(mu_posterior, sigma_posterior);
-//     tmp_loss += log(boost::math::pdf(dist_posterior, label_data[*iter]));
-//   }
-//   *loss = tmp_loss * -1 / record_index_vec.size();
-//   return true;
-// }
-
 bool NormalDistribution::calculate_boost_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
@@ -277,14 +236,5 @@ bool NormalDistribution::get_learning_rate(
   }
   return true;
 }
-
-// bool NormalDistribution::evaluate_rmsle(
-//     const std::vector<double>& label_data,
-//     const std::vector<uint64_t>& record_index_vec,
-//     const std::vector<std::tuple<double, double, double>>& predicted_param,
-//     double* rmsle) {
-//   LOG(FATAL) << "Not implemented yet";
-//   return true;
-// }
 
 }  // namespace pbtree

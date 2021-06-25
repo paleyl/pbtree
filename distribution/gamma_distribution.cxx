@@ -165,17 +165,10 @@ bool GammaDistribution::calculate_boost_gradient(
 
     double k, theta;
     transform_param(log_k, log_theta, 0, &k, &theta, nullptr);
-    // double k = exp(log_k);
-    // double theta = exp(log_theta);
 
     double y = label_data[*iter];
     double gradient_log_k = 
        (log(y / theta) - boost::math::digamma(k)) * k
-        // + 2 * FLAGS_regularization_param1 * pow(k, -0.3) // good 0.68 at 4-th round
-        // + 2 * FLAGS_regularization_param2 * pow(k, 0.3)
-        // - (k < 1.0 ? 2 * FLAGS_regularization_param1 * log(k) : 2 * FLAGS_regularization_param2 * log(k))
-        // + 2 * FLAGS_regularization_param2 * log(k)
-        // - 2 * FLAGS_regularization_param1 * log(k)
         - 2 * FLAGS_regularization_param1 * log(k / FLAGS_regularization_param2)
         ;
     double gradient_log_theta = (y / pow(theta, 2) - k / theta) * theta;
@@ -232,14 +225,6 @@ bool _calculate_boost_gradient(
     double gradient_theta = y / pow(theta, 2) - k / theta;
     sum_gradient_k += gradient_k;
     sum_gradient_theta += gradient_theta;
-    // boost::math::gamma_distribution<double> dist_sample(k, theta);
-    // boost::math::gamma_distribution<double> dist_delta_k(k + delta, theta);
-    // boost::math::gamma_distribution<double> dist_delta_theta(k, theta + delta);
-    // double p0 = boost::math::pdf(dist_sample, label_data[*iter]);
-    // double p_k = boost::math::pdf(dist_delta_k, label_data[*iter]);
-    // sum_gradient_k += log(p_k / p0) / delta;
-    // double p_theta = boost::math::pdf(dist_delta_theta, label_data[*iter] + delta);
-    // sum_gradient_theta += log(p_theta / p0) / delta;
   }
   double gradient_k = sum_gradient_k * FLAGS_learning_rate1;
   double gradient_theta = sum_gradient_theta * FLAGS_learning_rate2;
@@ -274,10 +259,7 @@ bool GammaDistribution::calculate_boost_loss(
     double new_theta = theta + delta_theta;
     double raw_k, raw_theta;
     transform_param(new_k, new_theta, 0, &raw_k, &raw_theta, nullptr);
-    // double raw_k = exp(new_k);
-    // double raw_theta = exp(new_theta);
-    // if (Utility::check_double_le(new_k, 0) || std::isnan(new_k)) new_k = 1e-3;
-    // if (Utility::check_double_le(new_theta, 0) || std::isnan(new_theta)) new_theta = 1e-3;
+
     boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
     double prob = boost::math::pdf(dist_sample, label_data[*iter]);
     if (prob < FLAGS_min_prob) {
@@ -303,8 +285,7 @@ bool GammaDistribution::set_boost_node_param(
     PBTree_Node* node) {
   double delta_k = 0, delta_theta = 0;
   calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
-  // if (Utility::check_double_le(delta_k, 0)) delta_k = 1e-3;
-  // if (Utility::check_double_le(delta_theta, 0)) delta_theta = 1e-3;
+
   node->set_p1(delta_k);
   node->set_p2(delta_theta);
   node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
@@ -328,15 +309,7 @@ bool GammaDistribution::get_learning_rate(
       const double& initial_p3_learning_rate,
       double* p1_learning_rate,
       double* p2_learning_rate, double* p3_learning_rate) {
-  // if (round % FLAGS_gamma_alter_round == 0) {
-  //   if (round % (2 * FLAGS_gamma_alter_round) == 0) {
-  //     *p1_learning_rate = 0;
-  //     *p2_learning_rate = initial_p2_learning_rate;
-  //   } else {
-  //     *p1_learning_rate = initial_p1_learning_rate;
-  //     *p2_learning_rate = 0;
-  //   }
-  // }
+
   if (round < FLAGS_gamma_alter_round) {
     *p1_learning_rate = 0;
     *p2_learning_rate = initial_p2_learning_rate;
@@ -346,20 +319,5 @@ bool GammaDistribution::get_learning_rate(
   }
   return true;
 }
-
-// bool GammaDistribution::evaluate_rmsle(
-//     const std::vector<double>& label_data,
-//     const std::vector<uint64_t>& record_index_vec,
-//     const std::vector<std::tuple<double, double, double>>& predicted_param,
-//     double* rmsle) {
-//   for (int i = 0; i < record_index_vec.size(); ++i)  {
-//     uint64_t record_index = record_index_vec[i];
-//     double first_moment = 0, second_moment = 0;
-//     param_to_moment(predicted_param[record_index], &first_moment, &second_moment);
-//     *rmsle += pow(log((label_data[record_index] + 1) / (first_moment + 1)), 2);
-//   }
-//   *rmsle = sqrt(*rmsle / record_index_vec.size());
-//   return true;
-// }
 
 }  // namespace pbtree

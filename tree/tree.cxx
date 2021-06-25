@@ -30,18 +30,13 @@ DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
 DEFINE_string(burned_model_path, "", "");
 
-// TODO(paleylv): current thread pool is not stable, 
-// use_multi_thread_filter should be false to avoid crash
-// use boost thread pool to replace current version.
 namespace pbtree {
 
 bool Tree::init() {
   m_max_non_zero_per_feature_ = 0;
   unsigned int num_cpu_cores = get_nprocs_conf();
-  int thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
+  FLAGS_thread_num = num_cpu_cores * 2 / 3 < FLAGS_thread_num ?
       num_cpu_cores * 2 / 3 : FLAGS_thread_num;
-  m_thread_pool_ptr_ = std::shared_ptr<ThreadPool>(
-      new ThreadPool(thread_num));
   return true;
 }
 
@@ -302,13 +297,7 @@ bool Tree::find_all_feature_split(
   }
   if (candidate_feature_vec && candidate_feature_vec->size() == 0) {return false;}
   std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
-  // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
-  //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
-  //   (*m_candidate_split_vec_ptr_)[i] =
-  //       std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX));
-  // }
-  // candidate_split_vec.reserve(m_valid_split_feature_vec_ptr_->size());
-  // std::fill(candidate_split_vec.begin(), candidate_split_vec.end(), std::make_pair(0, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX)));
+
   if (FLAGS_thread_num <= 1) {
     // for (unsigned long col_index = 0; col_index < m_matrix_ptr_->size1(); ++col_index) {
     for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
@@ -321,12 +310,7 @@ bool Tree::find_all_feature_split(
         candidate_split_vec.push_back(std::make_pair(feature_index, std::make_pair(tmp_split_point, tmp_split_loss)));
     }
   } else {
-    // std::vector<std::pair<uint64_t, std::pair<double, double>>> tmp_candidate_split_vec;
-    // for (auto iter = m_valid_histogram_vec_ptr_->begin(); iter != m_valid_histogram_vec_ptr_->end(); ++iter) {
-    //   uint64_t feature_index = iter->first;
-    //   candidate_split_vec.push_back(
-    //     std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX)));
-    // }
+
     uint64_t candidate_feature_num = 0;
     // std::unordered_set<uint64_t>* valid_feature_set_ptr;
     std::unordered_set<uint64_t> candidate_feature_set;
@@ -353,10 +337,7 @@ bool Tree::find_all_feature_split(
     boost::asio::thread_pool pool(FLAGS_thread_num);
     for (unsigned int i = 0; i < candidate_split_vec.size(); ++i) {
       uint64_t feature_index = candidate_split_vec[i].first;
-        // m_thread_pool_ptr_->do_job(std::bind(
-        //     &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
-        //     &(candidate_split_vec[i].second.first),
-        //     &(candidate_split_vec[i].second.second)));
+
       boost::asio::post(pool, std::bind(
             &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
             &(candidate_split_vec[i].second.first),
@@ -364,67 +345,12 @@ bool Tree::find_all_feature_split(
     }
     pool.join();
     pool.stop();
-    // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
-    //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
-    //   uint64_t candidate_index = i;
-    //   double current_record_ratio = record_index_vec.size() * 1.0 / (m_label_data_ptr_->size() * FLAGS_train_record_sample_ratio);
-    //   double expected_feature_non_zero_ratio = current_record_ratio * FLAGS_feature_non_zero_convert_ratio;
-    //   double feature_zero_ratio = (*m_valid_histogram_vec_ptr_)[i].second[0].second;
-    //   VLOG(101) << "Feature_index = " << feature_index
-    //           << ", current_record_ratio = " << current_record_ratio
-    //           << ", expected_feature_non_zero_ratio = " << expected_feature_non_zero_ratio
-    //           << ", feature_zero_ratio " << feature_zero_ratio;
-    //   if (candidate_feature_vec && candidate_feature_set.find(feature_index) == candidate_feature_set.end())
-    //     continue;
-    //   if (feature_zero_ratio > expected_feature_non_zero_ratio &&
-    //       feature_zero_ratio < 1 - expected_feature_non_zero_ratio) {
-    //     m_thread_pool_ptr_->do_job(std::bind(
-    //         &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
-    //         &((*m_candidate_split_vec_ptr_)[candidate_index].second.first),
-    //         &((*m_candidate_split_vec_ptr_)[candidate_index].second.second)));
-    //     ++candidate_feature_num;
-    //   }
-    // }
+
     VLOG(1) << "In calculation candidate feature num = " << candidate_feature_num 
             << ", triming candidate_feature_set size = " << candidate_feature_set.size();
-    // for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
-    //   uint64_t feature_index = *iter;
-    //   uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
-    //   // Find split cost 100ms, push job to thread cost 0.1ms, which is very expensive for sparse feature
-    //   m_thread_pool_ptr_->do_job(std::bind(
-    //       &Tree::find_one_feature_split, this, &record_index_vec, feature_index,
-    //       &(tmp_candidate_split_vec[candidate_index].second.first),
-    //       &(tmp_candidate_split_vec[candidate_index].second.second)));
-    // }
-    // while (// !m_thread_pool_ptr_->is_jobs_queue_empty()
-           //|| m_thread_pool_ptr_->is_working()
-    //       !m_thread_pool_ptr_->is_finished()
-    // ) {
-      // usleep(1000);
-      // std::this_thread::sleep_for(std::chrono::seconds(1));
-      // std::cout << "Queue size = " << m_thread_pool_ptr_->get_jobs_queue_size() << std::endl;
-      // std::cout << m_thread_pool_ptr_->get_worker_status() << std::endl;
-      // Loop and waiting
-    // }
-    // candidate_split_vec.push_back(tmp_candidate_split_vec[best_split_feature_index]);
-    // for (auto iter = m_valid_split_feature_vec_ptr_->begin(); iter != m_valid_split_feature_vec_ptr_->end(); ++iter) {
-    //   uint64_t candidate_index = iter - m_valid_split_feature_vec_ptr_->begin();
-    //   if (!std::isinf(tmp_candidate_split_vec[candidate_index].second.first))
-    //     candidate_split_vec.push_back(tmp_candidate_split_vec[candidate_index]);
-    // }
+
   }
-  // if (candidate_split_vec.size() <= 0) {
-  //   return false;
-  // }
-  
-  // std::sort(candidate_split_vec.begin(), candidate_split_vec.end(),
-  //     [](std::pair<uint64_t, std::pair<double, double>>& a,
-  //     std::pair<uint64_t, std::pair<double, double>>& b){
-  //     return (a.second.second < b.second.second);  // minimize the loss
-  //     });
-  // for (auto iter = candidate_split_vec.begin(); iter != candidate_split_vec.end(); ++iter) {
-  //   VLOG(101) << "After sorting " << iter->first << "," << iter->second.first << "," << iter->second.second;
-  // }
+
   uint64_t best_split_feature_index = 0;
   for (unsigned int i = 0; i < candidate_split_vec.size(); ++i) {
     if (candidate_split_vec[i].second.second < candidate_split_vec[best_split_feature_index].second.second &&
@@ -438,18 +364,7 @@ bool Tree::find_all_feature_split(
   *split_feature_index = candidate_split_vec[best_split_feature_index].first;
   *split_point = candidate_split_vec[best_split_feature_index].second.first;
   *split_loss = candidate_split_vec[best_split_feature_index].second.second;
-  // for (unsigned int i = 0; i < m_candidate_split_vec_ptr_->size(); ++i) {
-  //   if ((*m_candidate_split_vec_ptr_)[i].second.second < (*m_candidate_split_vec_ptr_)[best_split_feature_index].second.second &&
-  //       !std::isinf((*m_candidate_split_vec_ptr_)[i].second.first)) {
-  //     best_split_feature_index = i;
-  //   }
-  // }
-  // if (std::isinf((*m_candidate_split_vec_ptr_)[best_split_feature_index].second.first)) {
-  //   return false;
-  // }
-  // *split_feature_index = (*m_candidate_split_vec_ptr_)[best_split_feature_index].first;
-  // *split_point = (*m_candidate_split_vec_ptr_)[best_split_feature_index].second.first;
-  // *split_loss = (*m_candidate_split_vec_ptr_)[best_split_feature_index].second.second;
+
   return true;
 }
 
@@ -550,12 +465,7 @@ bool Tree::check_valid_candidate(
   for (unsigned int i = 0; i < pre_filter_feature_vec.size(); i += batch_size) {
     unsigned int j = i + batch_size < pre_filter_feature_vec.size() ?
         i + batch_size : pre_filter_feature_vec.size();
-    // m_thread_pool_ptr_->do_job(std::bind(
-    //     &Tree::do_intersection1, this,
-    //     &record_index_vec,
-    //     &pre_filter_feature_vec,
-    //     i, j, &result_vec
-    // ));
+
     boost::asio::post(pool, std::bind(
         &Tree::do_intersection1, this,
         &record_index_vec,
@@ -565,19 +475,7 @@ bool Tree::check_valid_candidate(
   }
   pool.join();
   pool.stop();
-  // for (auto iter_feature = pre_filter_feature_vec.begin();
-  //     iter_feature < pre_filter_feature_vec.end(); iter_feature += batch_size) {
-  //   auto current_turn_end = iter_feature + batch_size < pre_filter_feature_vec.end() ?
-  //       iter_feature + batch_size : pre_filter_feature_vec.end();
-  //   m_thread_pool_ptr_->do_job(
-  //       std::bind(&Tree::do_intersection, this,
-  //       iter_feature,
-  //       current_turn_end,
-  //       &record_index_vec,
-  //       &(result_vec[iter_feature - pre_filter_feature_vec.begin()])
-  //   ));
-  // }
-  //        while (!m_thread_pool_ptr_->is_finished()) {/*Just wait for finishing*/}
+
   for (unsigned long i = 0; i < pre_filter_feature_vec.size(); ++i) {
     if (result_vec[i] >= FLAGS_split_min_count) {
       candidate_feature_vec->push_back(pre_filter_feature_vec[i]);
@@ -591,27 +489,7 @@ bool Tree::find_one_feature_split(
     double* split_point, double* split_loss) {
   const std::vector<std::pair<double, float>>& histogram = (*m_histogram_vec_ptr_)[feature_index];
   std::vector<std::pair<double, double>> candidate_split_vec;
-  // if (histogram.empty()) {
-  //   VLOG(202) << "Feature index " << feature_index << " empty histogram";
-  //   return false;
-  // }
-  // if (histogram.size() == 1) {
-  //   *split_point = 0;
-  //   *split_loss = DBL_MAX;
-  //   VLOG(201) << "Feature index histogram size is 1";
-  //   return false;
-  // }
-  // if (histogram[0].second > 1 - FLAGS_split_min_ratio) {
-  //   VLOG(101) << "Feature index " << feature_index << " zero ratio "
-  //             << histogram[0].second << " > " << FLAGS_split_min_ratio;
-  //   return true;
-  // }
-  // if (!check_split_histogram(feature_index)) {
-  //   VLOG(102) << "Feature index " << feature_index << " can not build node.";
-  //   return false;
-  // }
-  // double total_loss = 0;
-  // m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, row_index_vec, &total_loss);
+
   for (auto histogram_iter = histogram.begin();
       histogram_iter != histogram.end() - 1; ++histogram_iter) {
 
@@ -783,11 +661,7 @@ bool Tree::build_tree() {
             << " valid total_nnz = " << valid_total_nnz;
   m_non_zero_value_map_ptr_ =
       std::make_shared<std::map<uint64_t, std::vector<uint64_t>>>(non_zero_value_map);
-  // std::sort(valid_histogram_vec.begin(), valid_histogram_vec.end(),
-  //     [](const std::pair<uint64_t, std::vector<std::pair<double, float>>>& a,
-  //     const std::pair<uint64_t, std::vector<std::pair<double, float>>>& b){
-  //       return a.second[0].second < b.second[0].second;
-  //     });
+
   m_valid_histogram_vec_ptr_ =
       std::make_shared<std::vector<std::pair<uint64_t,
           std::vector<std::pair<double, float>>>>>(valid_histogram_vec);
@@ -822,17 +696,6 @@ bool Tree::build_tree() {
 
   m_valid_split_feature_vec_ptr_ = std::make_shared<std::vector<uint64_t>>(valid_split_feature_vec);
   LOG(INFO) << "Valid feature index size is " << m_valid_split_feature_vec_ptr_->size();
-  // std::shared_ptr<PBTree_Node> root =
-  //     std::shared_ptr<PBTree_Node>(new PBTree_Node());
-  // std::vector<std::pair<uint64_t, std::pair<double, double>>> candidate_split_vec;
-  // candidate_split_vec.resize(m_valid_histogram_vec_ptr_->size());
-  // for (unsigned int i = 0; i < m_valid_histogram_vec_ptr_->size(); ++i) {
-  //   uint64_t feature_index = (*m_valid_histogram_vec_ptr_)[i].first;
-  //   candidate_split_vec[i] =
-  //     std::make_pair(feature_index, std::make_pair(std::numeric_limits<double>::infinity(), DBL_MAX));
-  // }
-  // m_candidate_split_vec_ptr_ =
-  //     std::make_shared<std::vector<std::pair<uint64_t, std::pair<double, double>>>>(candidate_split_vec);
 
   std::vector<uint64_t> record_index_vec;
   record_index_vec.reserve(m_matrix_ptr_->size2());
@@ -840,11 +703,7 @@ bool Tree::build_tree() {
     record_index_vec.push_back(i);
   }
   ModelManager model_manager;
-  // if (!FLAGS_burned_model_path.empty()) {
-  //   model_manager.load_tree_model(FLAGS_burned_model_path, &m_pbtree_ptr_);
-  // } else {
-  //   m_pbtree_ptr_ = std::make_shared<pbtree::PBTree>(new pbtree::PBTree());
-  // }
+
   double learning_rate1 = FLAGS_learning_rate1;
   double learning_rate2 = FLAGS_learning_rate2;
   double init_p1 = 0, init_p2 = 0, init_p3 = 0;

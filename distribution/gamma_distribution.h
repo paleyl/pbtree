@@ -61,11 +61,6 @@ class GammaDistribution : public Distribution {
       const double& p1, const double& p2, const double& p3,
       const double& lower_interval, const double& upper_interval,
       double* lower_bound, double* upper_bound);
-  // bool evaluate_rmsle(
-  //     const std::vector<double>& label_data,
-  //     const std::vector<uint64_t>& record_index_vec,
-  //     const std::vector<std::tuple<double, double, double>>& predicted_paramm,
-  //     double* rmsle);
 
   bool get_learning_rate(
       const uint64_t& round,

@@ -74,11 +74,6 @@ class NormalDistribution : public Distribution {
       const double& lower_interval, const double& upper_upper_interval,
       double* lower_bound, double* upper_bound);
 
-  // bool evaluate_rmsle(
-  //     const std::vector<double>& label_data,
-  //     const std::vector<uint64_t>& record_index_vec,
-  //     const std::vector<std::tuple<double, double, double>>& predicted_param,
-  //     double* rmsle);
   bool get_learning_rate(
       const uint64_t& round,
       const double& initial_p1_learning_rate,

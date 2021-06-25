@@ -21,7 +21,6 @@
 #include "distribution/distribution.h"
 #include "utility/utility.h"
 #include "Tree.pb.h"
-#include "thread_pool.h"
 #include "io/model_manager.h"
 
 namespace pbtree {
@@ -122,7 +121,6 @@ class Tree {
       <std::vector<std::pair<double, float>>>> m_histogram_vec_ptr_;  // value, percentile
   std::shared_ptr<Distribution> m_distribution_ptr_;
   std::shared_ptr<std::vector<std::tuple<double, double, double>>> m_pred_param_vec_ptr_;
-  std::shared_ptr<ThreadPool> m_thread_pool_ptr_;
   std::shared_ptr<std::vector<uint64_t>> m_valid_split_feature_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>>> m_valid_histogram_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::pair<double, double>>>> m_candidate_split_vec_ptr_;

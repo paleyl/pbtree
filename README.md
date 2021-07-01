@@ -17,6 +17,9 @@ This project provides a framework for distribution prediction by Probability Boo
 PBTree的单颗树的示意图如下：
 ![pbtree](./image/pbtree3_1.mdl.png)
 
+PBTree对分布的拟合过程例子如下：
+![pbtree](./image/alter_coord.gif)
+
 ## 部署
 
 您可以直接从源码编译，需要：

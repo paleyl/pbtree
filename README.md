@@ -18,6 +18,7 @@ PBTree的单颗树的示意图如下：
 ![pbtree](./image/pbtree3_1.mdl.png)
 
 PBTree对分布的拟合过程例子如下：
+
 <img src="./image/alter_coord.gif" width = "600" height = "400" alt="PBTree拟合过程" align=center />
 
 

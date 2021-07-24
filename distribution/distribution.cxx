@@ -2,6 +2,7 @@
 #include "distribution.h"
 #include "gamma_distribution.h"
 #include "normal_distribution.h"
+#include "nonparametric_continuous_distribution.h"
 
 DEFINE_uint32(distribution_sample_point_num, 100, "");
 DEFINE_double(regularization_param1, 0.01, "");
@@ -39,17 +40,16 @@ bool Distribution::calc_sample_moment(
 bool Distribution::evaluate_rmsle(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    const std::vector<std::vector<double>>& predicted_dist,
     double* rmsle) {
   for (unsigned long i = 0; i < record_index_vec.size(); ++i)  {
     uint64_t record_index = record_index_vec[i];
-    double p1 = 0, p2 = 0;
+//    double p1 = 0, p2 = 0;
     double first_moment = 0, second_moment = 0;
-    transform_param(
-      std::get<0>(predicted_param[record_index]), std::get<1>(predicted_param[record_index]),
-      std::get<2>(predicted_param[record_index]),
-      &p1, &p2, nullptr);
-    param_to_moment(std::make_tuple(p1, p2, 0), &first_moment, &second_moment);
+    std::vector<double> transformed_dist;
+    transform_param(predicted_dist[record_index],
+      &transformed_dist);
+    param_to_moment(transformed_dist, &first_moment, &second_moment);
     *rmsle += pow(log(label_data[record_index] + 1) - log(first_moment + 1), 2);
   }
   *rmsle = sqrt(*rmsle / record_index_vec.size());
@@ -65,6 +65,9 @@ std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_Distr
     break;
   case PBTree_DistributionType_GAMMA_DISTRIBUTION:
     distribution_ptr = std::shared_ptr<Distribution>(new GammaDistribution());
+    break;
+  case PBTree_DistributionType_NONPARAMETRIC_CONTINUOUS:
+    distribution_ptr = std::shared_ptr<Distribution>(new NonparametricContinousDistribution());
     break;
   default:
     LOG(FATAL) << "Unrecognized distribution type " << type;

@@ -29,6 +29,7 @@ DEFINE_uint32(alter_coord_round, 5, "");
 DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
 DEFINE_string(burned_model_path, "", "");
+DEFINE_uint32(target_bin_num, 100, "");
 
 namespace pbtree {
 
@@ -41,27 +42,25 @@ bool Tree::init() {
 }
 
 bool Tree::init_pred_dist_vec(
-    const double& p1, const double& p2, const double& p3) {
-  std::vector<std::tuple<double, double, double>> pred_param_vec;
-  auto init_param = std::make_tuple(p1, p2, p3);
-  pred_param_vec.reserve(m_label_data_ptr_->size());
+    const std::vector<double>& init_param) {
+  std::vector<std::vector<double>> pred_vec;
+  pred_vec.reserve(m_label_data_ptr_->size());
   for (unsigned int i = 0; i < m_label_data_ptr_->size(); ++i) {
-    pred_param_vec.push_back(init_param);
+    pred_vec.push_back(init_param);
   }
-  m_pred_param_vec_ptr_ =
-      std::make_shared<std::vector<std::tuple<double, double, double>>>(pred_param_vec);
+  m_pred_dist_vec_ptr_ =
+      std::make_shared<std::vector<std::vector<double>>>(pred_vec);
   return true;
 }
 
 bool Tree::predict_one_tree(
     const boost::numeric::ublas::matrix_row<
     boost::numeric::ublas::compressed_matrix<double>>& record,
-    const PBTree_Node& root, double* p1, double* p2, double* p3) {
+    const PBTree_Node& root, std::vector<double>* prediction) {
   if (!(root.has_left_child() && root.left_child().has_level()) &&
       !(root.has_right_child() && root.right_child().has_level())) {
-    *p1 = root.p1();
-    *p2 = root.p2();
-    VLOG(202) << "At level " << root.level() << " " << *p1 << " " << *p2;
+    *prediction = std::vector<double>(root.target_dist().begin(), root.target_dist().end());
+    VLOG(202) << "At level " << root.level() << " " << (*prediction)[0] << " " << (*prediction)[1];
     return true;
   }
   // We assume every node is binary tree
@@ -71,10 +70,10 @@ bool Tree::predict_one_tree(
   if (Utility::check_double_le(
       record(split_feature_index), split_feature_value)) {
     VLOG(202) << "Go into left child " << root.level();
-    predict_one_tree(record, root.left_child(), p1, p2, p3);
+    predict_one_tree(record, root.left_child(), prediction);
   } else {
     VLOG(202) << "Go into right child " << root.level();
-    predict_one_tree(record, root.right_child(), p1, p2, p3);
+    predict_one_tree(record, root.right_child(), prediction);
   }
   return true;
 }
@@ -82,13 +81,13 @@ bool Tree::predict_one_tree(
 bool Tree::predict(
     const boost::numeric::ublas::matrix_row<
     boost::numeric::ublas::compressed_matrix<double>>& record,
-    double* p1, double* p2, double* p3) {
+    std::vector<double>* prediction) {
   if (m_pbtree_ptr_->tree_size() == 0) {
     return false;
   }
   const PBTree_Node& root = m_pbtree_ptr_->tree(0);
 
-  if (!predict_one_tree(record, root, p1, p2, p3)) {
+  if (!predict_one_tree(record, root, prediction)) {
     LOG(ERROR) << "Predict instance failed";
     return false;
   };
@@ -97,42 +96,45 @@ bool Tree::predict(
 
 bool Tree::boost_predict_data_set(
   const boost::numeric::ublas::compressed_matrix<double>& matrix,
-  std::vector<std::tuple<double, double, double>>* pred_param_vec,
+  std::vector<std::vector<double>>* pred_dist_vec,
   std::vector<std::tuple<double, double>>* pred_moment_vec,
   std::vector<std::pair<double, double>>* pred_interval_vec) {
   auto dist = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
-  pred_param_vec->reserve(matrix.size2());
+  pred_dist_vec->reserve(matrix.size2());
   pred_moment_vec->reserve(matrix.size2());
   pred_interval_vec->reserve(matrix.size2());
   for (unsigned long i = 0; i < matrix.size2(); ++i) {  // Assumed column major
-    double p1 = m_pbtree_ptr_->init_p1(), p2 = m_pbtree_ptr_->init_p2(), p3 = m_pbtree_ptr_->init_p3();
+    std::vector<double> prediction(m_pbtree_ptr_->init_pred().begin(), m_pbtree_ptr_->init_pred().end());
+    // double p1 = m_pbtree_ptr_->init_p1(), p2 = m_pbtree_ptr_->init_p2(), p3 = m_pbtree_ptr_->init_p3();
     for (int j = 0; j < m_pbtree_ptr_->tree_size(); ++j) {
-      boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &p1, &p2, &p3);
-      VLOG(102) << "Round " << j << " param: (" << p1 << "," << p2 << ")";
+      boost_update_one_instance(m_pbtree_ptr_->tree(j), i, &prediction);
+      VLOG(102) << "Round " << j << " param: (" << prediction[0] << "," << prediction[1] << ")";
     }
-    double raw_param_p1 = 0, raw_param_p2 = 0;
-    dist->transform_param(p1, p2, p3, &raw_param_p1, &raw_param_p2, nullptr);
-    auto pred_param = std::make_tuple(raw_param_p1, raw_param_p2, 0.0);
+    // double raw_param_p1 = 0, raw_param_p2 = 0;
+    std::vector<double> transformed_prediction;
+    dist->transform_param(prediction, &transformed_prediction);
+    // auto pred_param = std::make_tuple(raw_param_p1, raw_param_p2, 0.0);
     double first_moment = 0, second_moment = 0;
-    dist->param_to_moment(pred_param, &first_moment, &second_moment);
-    pred_param_vec->push_back(pred_param);
+    dist->param_to_moment(transformed_prediction, &first_moment, &second_moment);
+    pred_dist_vec->push_back(transformed_prediction);
     pred_moment_vec->push_back(std::make_tuple(first_moment, second_moment));
     double lower_bound = 0, upper_bound = 0;
     dist->predict_interval(
-        raw_param_p1, raw_param_p2, 0.0, FLAGS_lower_confidence_interval, FLAGS_upper_confidence_interval,
+        transformed_prediction, FLAGS_lower_confidence_interval, FLAGS_upper_confidence_interval,
         &lower_bound, &upper_bound);
     pred_interval_vec->push_back(std::make_pair(lower_bound, upper_bound));
   }
   return true;
 }
 
+// this should be customized in each distribution class
 bool Tree::boost_update_one_instance(
     const PBTree_Node& new_tree_node,
     unsigned long record_index,
-    double* p1, double* p2, double* p3) {
+    std::vector<double>* pred_vec) {
   if (!new_tree_node.has_left_child() && !new_tree_node.has_right_child()) {
-    *p1 += new_tree_node.p1();
-    *p2 += new_tree_node.p2();
+    (*pred_vec)[0] += new_tree_node.p1();
+    (*pred_vec)[1] += new_tree_node.p2();
     return true;
   }
   CHECK(new_tree_node.has_left_child() && new_tree_node.has_right_child());
@@ -141,28 +143,28 @@ bool Tree::boost_update_one_instance(
   if (Utility::check_double_le(
       (*m_matrix_ptr_)(split_feature_index, record_index), split_feature_value)) {
     VLOG(202) << "Go into left child " << new_tree_node.level();
-    boost_update_one_instance(new_tree_node.left_child(), record_index, p1, p2, p3);
+    boost_update_one_instance(new_tree_node.left_child(), record_index, pred_vec);
   } else {
     VLOG(202) << "Go into right child " << new_tree_node.level();
-    boost_update_one_instance(new_tree_node.right_child(), record_index, p1, p2, p3);
+    boost_update_one_instance(new_tree_node.right_child(), record_index, pred_vec);
   }
   return true;
 }
 
 bool Tree::boost_update(const PBTree_Node& new_tree) {
-  std::vector<std::tuple<double, double, double>> updated_param_vec;
+  std::vector<std::vector<double>> updated_param_vec;
   updated_param_vec.reserve(m_matrix_ptr_->size2());
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
-    auto param = (*m_pred_param_vec_ptr_)[i];
-    double p1 = std::get<0>(param);
-    double p2 = std::get<1>(param);
-    double p3 = std::get<2>(param);
-    boost_update_one_instance(new_tree, i, &p1, &p2, &p3);
-    updated_param_vec.push_back(std::make_tuple(p1, p2, p3));
+    auto param = (*m_pred_dist_vec_ptr_)[i];
+    // double p1 = std::get<0>(param);
+    // double p2 = std::get<1>(param);
+    // double p3 = std::get<2>(param);
+    boost_update_one_instance(new_tree, i, &param);
+    updated_param_vec.push_back(param);
   }
-  m_pred_param_vec_ptr_ =
+  m_pred_dist_vec_ptr_ =
       std::make_shared<std::vector<
-          std::tuple<double, double, double>>>(updated_param_vec);
+          std::vector<double>>>(updated_param_vec);
   return true;
 }
 
@@ -181,8 +183,8 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   double current_loss = 0;
   if (FLAGS_boosting_mode) {
     m_distribution_ptr_->set_boost_node_param(
-        *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, node);
-    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &current_loss, true);
+        *m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, node);
+    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, &current_loss, true);
   } else {
     m_distribution_ptr_->set_tree_node_param(*m_label_data_ptr_, record_index_vec, node);
     m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, record_index_vec, &current_loss);
@@ -252,8 +254,8 @@ bool Tree::create_node(const std::vector<uint64_t>& record_index_vec,
   }
   if (FLAGS_evaluate_loss_every_node) {
     double left_loss = 0, right_loss = 0;
-    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_param_vec_ptr_, &left_loss, true);
-    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_param_vec_ptr_, &right_loss, true);
+    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_dist_vec_ptr_, &left_loss, true);
+    m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_dist_vec_ptr_, &right_loss, true);
     LOG(INFO) << "Level " << level << ", record vec size = " << record_index_vec.size()
               << ", split_feature_index = " << split_feature_index
               << ", split_point = " << split_point
@@ -524,8 +526,8 @@ bool Tree::find_one_feature_split(
     double left_loss = 0;
     double right_loss = 0;
     if (FLAGS_boosting_mode) {
-      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_param_vec_ptr_, &left_loss);
-      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_param_vec_ptr_, &right_loss);
+      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, left_index_vec, *m_pred_dist_vec_ptr_, &left_loss);
+      m_distribution_ptr_->calculate_boost_loss(*m_label_data_ptr_, right_index_vec, *m_pred_dist_vec_ptr_, &right_loss);
     } else {
       m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, left_index_vec, &left_loss);
       m_distribution_ptr_->calculate_loss(*m_label_data_ptr_, right_index_vec, &right_loss);
@@ -606,7 +608,61 @@ bool Tree::build_histogram(
   return true;
 }
 
+bool Tree::build_target_bins(
+    std::vector<double>* target_bins,
+    std::vector<double>* target_dist) {
+  build_target_bins_equal_freq(target_bins, target_dist);
+  return true;
+}
+
+bool Tree::build_target_bins_equal_freq(
+    std::vector<double>* target_bins,
+    std::vector<double>* target_dist) {
+  std::vector<double> label_vec = *m_label_data_ptr_;
+  std::sort(label_vec.begin(), label_vec.end());
+  uint32_t step = label_vec.size() / FLAGS_target_bin_num;
+  double current_bin = DBL_MAX;
+  for (uint32_t i = 0; i < label_vec.size(); i += step) {
+    if (!Utility::check_double_equal(current_bin, label_vec[i])) {
+      target_bins->push_back(label_vec[i]);
+      current_bin = label_vec[i];
+    }
+  }
+  uint32_t j = 0;
+  uint32_t i = 0;
+  uint32_t count = 0;
+  for (; i < label_vec.size() && j < target_bins->size(); ++i) {
+    if (!Utility::check_double_le((*target_bins)[j], label_vec[i]))
+      ++count;
+    else {
+      target_dist->push_back(count * 1.0 / label_vec.size());
+      count = 0;
+      ++j;
+    }
+  }
+  target_dist->push_back((label_vec.size() - i) * 1.0 / label_vec.size());
+  CHECK_EQ(target_bins->size() + 1, target_dist->size());
+  LOG(INFO) << "(-inf, " << (*target_bins)[0] << ")"
+            << " = " << (*target_dist)[0];
+  for (uint32_t i = 0; i < target_bins->size() - 1; ++i) {
+    LOG(INFO) << "[" << (*target_bins)[i] << ", "
+              << (*target_bins)[i + 1] << ")"
+              << " = " << (*target_dist)[i + 1];
+  }
+  LOG(INFO) << "[" << (*target_bins)[target_bins->size() - 1] << ", inf)"
+            << " = " << (*target_dist)[target_bins->size()];
+  return true;
+}
+
 bool Tree::build_tree() {
+  // build target distribution
+  std::vector<double> target_dist, target_bins; 
+  build_target_bins(&target_bins, &target_dist);
+  m_target_dist_ptr_ = std::make_shared<std::vector<double>>(target_dist);
+  m_target_bins_ptr_ = std::make_shared<std::vector<double>>(target_bins);
+  for (uint32_t i = 0; i < target_bins.size(); ++i) {
+    m_pbtree_ptr_->add_target_bins(target_bins[i]);
+  }
   // build histogram
   std::vector
       <std::vector<std::pair<double, float>>> histogram_vec;
@@ -707,11 +763,17 @@ bool Tree::build_tree() {
   double learning_rate1 = FLAGS_learning_rate1;
   double learning_rate2 = FLAGS_learning_rate2;
   double init_p1 = 0, init_p2 = 0, init_p3 = 0;
-  m_distribution_ptr_->init_param(&init_p1, &init_p2, &init_p3);
+  std::vector<double> init_dist;
+  m_distribution_ptr_->init_param(&init_dist);
+  init_p1 = init_dist[0];
+  init_p2 = init_dist[1];
+  if (init_dist.size() >= 2) init_p3 = init_dist[2];
   m_pbtree_ptr_->set_init_p1(init_p1);
   m_pbtree_ptr_->set_init_p2(init_p2);
   m_pbtree_ptr_->set_init_p3(init_p3);
-  init_pred_dist_vec(init_p1, init_p2, init_p3);
+  for (uint32_t i = 0; i < init_dist.size(); ++i)
+    m_pbtree_ptr_->add_init_pred(init_dist[i]);
+  init_pred_dist_vec(init_dist);
   for (unsigned int i = 0; i < FLAGS_training_round; ++i) {
     m_distribution_ptr_->get_learning_rate(i, learning_rate1, learning_rate2, 0,
         &FLAGS_learning_rate1, &FLAGS_learning_rate2, nullptr);
@@ -739,10 +801,10 @@ bool Tree::build_tree() {
       boost_update(*root);
       double loss = 0;
       m_distribution_ptr_->calculate_boost_loss(
-          *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &loss, true);
+          *m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, &loss, true);
       double rmsle = 0;
       m_distribution_ptr_->evaluate_rmsle(
-          *m_label_data_ptr_, record_index_vec, *m_pred_param_vec_ptr_, &rmsle);
+          *m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, &rmsle);
       LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss << ", rmsle = " << rmsle;
     }
   }

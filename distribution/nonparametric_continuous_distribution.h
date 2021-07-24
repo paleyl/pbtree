@@ -1,10 +1,10 @@
-#ifndef DISTRIBUTION_GAMMA_DISTRIBUTION_H_
-#define DISTRIBUTION_GAMMA_DISTRIBUTION_H_
+#ifndef DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
+#define DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
 
 #include "distribution.h"
 
 namespace pbtree {
-class GammaDistribution : public Distribution {
+class NonparametricContinousDistribution : public Distribution {
  public:
   bool calculate_loss(
       const std::vector<double>& label_data,
@@ -68,10 +68,10 @@ class GammaDistribution : public Distribution {
       double* p2_learning_rate, double* p3_learning_rate);
 
   void print_version() {
-    VLOG(202) << "Gamma distribution";
+    VLOG(202) << "NonparametricContinuous distribution";
   }
 };
 
 }  // namespace pbtree
 
-#endif  // DISTRIBUTION_GAMMA_DISTRIBUTION_H_
+#endif  // DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_

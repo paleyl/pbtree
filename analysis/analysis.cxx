@@ -131,15 +131,16 @@ bool AnalysisManager::draw_one_node(
         DistributionManager::get_distribution(node.distribution_type());
     std::string curve_str;
     double p1 = node.p1(), p2 = node.p2(), p3 = node.p3();
-    // double raw_p1 = node.p1(), raw_p2 = node.p2(), raw_p3 = node.p3();
+    std::vector<double> distribution = {p1, p2, p3};
     if (FLAGS_boosting_mode) {
       double raw_p1 = node.p1() + m_pbtree_ptr_->init_p1();
       double raw_p2 = node.p2() + m_pbtree_ptr_->init_p2();
       double raw_p3 = node.p3() + m_pbtree_ptr_->init_p3();
-      distribution_ptr->transform_param(raw_p1, raw_p2, raw_p3, &p1, &p2, &p3);
+      std::vector<double> raw_dist = {raw_p1, raw_p2, raw_p3};
+      distribution_ptr->transform_param(raw_dist, &distribution);
     }
-//    double raw_p1 = node.p1() + 
-    distribution_ptr->plot_distribution_curve(p1, p2, p3, &curve_str);
+//    double raw_p1 = node.p1() +
+    distribution_ptr->plot_distribution_curve(distribution, &curve_str);
     std::ofstream curve_file;
     std::string curve_file_name = FLAGS_output_plot_directory + "/tree_" + std::to_string(tree_index) + "_node_"
         + std::to_string(current_node_id) + "_curve_file.txt";

@@ -29,8 +29,7 @@ class Distribution {
   virtual bool calculate_loss(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,
-      double* loss, double* p1 = nullptr,
-      double* p2 = nullptr, double* p3 = nullptr) = 0;
+      double* loss, std::vector<double>* distribution = nullptr) = 0;
 
   virtual bool set_tree_node_param(
       const std::vector<double>& label_data,
@@ -38,9 +37,7 @@ class Distribution {
       PBTree_Node* node) = 0;
 
   virtual bool plot_distribution_curve(
-      const double& p1,
-      const double& p2,
-      const double& p3,
+      const std::vector<double>& distribution,
       std::string* output_str) = 0;
 
   virtual bool calculate_moment(
@@ -53,36 +50,34 @@ class Distribution {
       const std::vector<uint64_t>& row_index_vec,
       double* first_moment,
       double* second_moment);
-  
+
   virtual bool param_to_moment(
-      const std::tuple<double, double, double>& param,
+      const std::vector<double>& distribution,
       double* first_moment, double* second_moment) = 0;
 
   virtual bool calculate_boost_loss(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      const std::vector<std::vector<double>>& prior,
       double* loss,
       const bool& evaluation = false) = 0;
 
   virtual bool calculate_boost_gradient(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
-      double* g_p1, double* g_p2, double* g_p3) = 0;
+      const std::vector<std::vector<double>>& prior,
+      std::vector<double>* likelihood) = 0;
 
   virtual bool set_boost_node_param(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& row_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    const std::vector<std::vector<double>>& prior,
     PBTree_Node* node) = 0;
 
   virtual bool transform_param(
-      const double& raw_p1, const double& raw_p2, const double& raw_p3,
-      double* p1, double* p2, double* p3) {
-    *p1 = raw_p1;
-    *p2 = raw_p2;
-    if (p3) *p3 = raw_p3;
+      const std::vector<double>& raw_dist,
+      std::vector<double>* pred_dist) {
+    *pred_dist = raw_dist;
     return true;
   }
 
@@ -94,13 +89,13 @@ class Distribution {
   bool evaluate_rmsle(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      const std::vector<std::vector<double>>& predicted_dist,
       double* rmsle);
 
-  virtual bool init_param(double* p1, double* p2, double* p3) = 0;
+  virtual bool init_param(std::vector<double>* init_dist) = 0;
 
   virtual bool predict_interval(
-      const double& p1, const double& p2, const double& p3,
+      const std::vector<double>& distribution,
       const double& lower_interval, const double& upper_upper_interval,
       double* lower_bound, double* upper_bound) = 0;
 
@@ -111,6 +106,18 @@ class Distribution {
       const double& initial_p3_learning_rate,
       double* p1_learning_rate,
       double* p2_learning_rate, double* p3_learning_rate) = 0;
+
+  void set_target_bins(std::shared_ptr<std::vector<double>> target_bins) {
+    m_target_bins_ptr_ = target_bins;
+  }
+
+  void set_target_dist(std::shared_ptr<std::vector<double>> target_dist) {
+    m_target_dist_ptr_ = target_dist;
+  }
+
+ protected:
+  std::shared_ptr<std::vector<double>> m_target_bins_ptr_;
+  std::shared_ptr<std::vector<double>> m_target_dist_ptr_;
 };
 
 class DistributionManager {

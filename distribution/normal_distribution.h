@@ -10,8 +10,7 @@ class NormalDistribution : public Distribution {
   bool calculate_loss(
       const std::vector<double>& train_data,
       const std::vector<uint64_t>& row_index_vec,
-      double* loss, double* p1 = nullptr,
-      double* p2 = nullptr, double* p3 = nullptr);
+      double* loss, std::vector<double>* distribution = nullptr);
 
   bool set_tree_node_param(
       const std::vector<double>& label_data,
@@ -19,9 +18,7 @@ class NormalDistribution : public Distribution {
       PBTree_Node* node);
 
   bool plot_distribution_curve(
-      const double& p1,
-      const double& p2,
-      const double& p3,
+      const std::vector<double>& distribution,
       std::string* output_str);
 
   bool calculate_moment(
@@ -30,32 +27,33 @@ class NormalDistribution : public Distribution {
       double* second_moment);
 
   bool param_to_moment(
-      const std::tuple<double, double, double>& param,
+      const std::vector<double>& distribution,
       double* first_moment, double* second_moment);
 
-  bool init_param(double* p1, double* p2, double* p3) {
-      *p1 = 0.0;  // mu
-      *p2 = 1.0;  // sigma
+  bool init_param(std::vector<double>* init_dist) {
+      init_dist->resize(2);
+      (*init_dist)[0] = 0.0;  // mu
+      (*init_dist)[1] = 1.0;  // sigma
       return true;
   }
 
   bool calculate_boost_loss(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      const std::vector<std::vector<double>>& prior,
       double* loss,
       const bool& evaluation = false);
 
   virtual bool calculate_boost_gradient(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
-      double* g_p1, double* g_p2, double* g_p3);
+      const std::vector<std::vector<double>>& prior,
+      std::vector<double>* likelihood);
 
   bool set_boost_node_param(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param,
+      const std::vector<std::vector<double>>& prior,
       PBTree_Node* node);
 
   bool evaluate_rmse(
@@ -66,11 +64,11 @@ class NormalDistribution : public Distribution {
   }
 
   bool transform_param(
-      const double& raw_p1, const double& raw_p2, const double& raw_p3,
-      double* p1, double* p2, double* p3);
+      const std::vector<double>& raw_dist,
+      std::vector<double>* pred_dist);
 
   bool predict_interval(
-      const double& p1, const double& p2, const double& p3,
+      const std::vector<double>& distribution,
       const double& lower_interval, const double& upper_upper_interval,
       double* lower_bound, double* upper_bound);
 

@@ -92,6 +92,23 @@ class Distribution {
       const std::vector<std::vector<double>>& predicted_dist,
       double* rmsle);
 
+  bool evaluate_cprs(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::vector<double>>& predicted_dist,
+      double* cprs);
+
+  bool evaluate_one_instance_cprs(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* cprs);
+
+  bool pdf_to_cdf(
+      const std::vector<double>& predicted_pdf,
+      std::vector<double>* predicted_cdf);
+
+  virtual bool update_instance(const PBTree_Node& node, std::vector<double>* pred_vec) = 0;
+
   virtual bool init_param(std::vector<double>* init_dist) = 0;
 
   virtual bool predict_interval(

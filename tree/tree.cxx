@@ -99,7 +99,9 @@ bool Tree::boost_predict_data_set(
   std::vector<std::vector<double>>* pred_dist_vec,
   std::vector<std::tuple<double, double>>* pred_moment_vec,
   std::vector<std::pair<double, double>>* pred_interval_vec) {
-  auto dist = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
+  m_distribution_ptr_ = DistributionManager::get_distribution(m_pbtree_ptr_->tree(0).distribution_type());
+  std::vector<double> target_bins(m_pbtree_ptr_->target_bins().begin(), m_pbtree_ptr_->target_bins().end());
+  m_distribution_ptr_->set_target_bins(std::make_shared<std::vector<double>>(target_bins));
   pred_dist_vec->reserve(matrix.size2());
   pred_moment_vec->reserve(matrix.size2());
   pred_interval_vec->reserve(matrix.size2());
@@ -112,14 +114,14 @@ bool Tree::boost_predict_data_set(
     }
     // double raw_param_p1 = 0, raw_param_p2 = 0;
     std::vector<double> transformed_prediction;
-    dist->transform_param(prediction, &transformed_prediction);
+    m_distribution_ptr_->transform_param(prediction, &transformed_prediction);
     // auto pred_param = std::make_tuple(raw_param_p1, raw_param_p2, 0.0);
     double first_moment = 0, second_moment = 0;
-    dist->param_to_moment(transformed_prediction, &first_moment, &second_moment);
+    m_distribution_ptr_->param_to_moment(transformed_prediction, &first_moment, &second_moment);
     pred_dist_vec->push_back(transformed_prediction);
     pred_moment_vec->push_back(std::make_tuple(first_moment, second_moment));
     double lower_bound = 0, upper_bound = 0;
-    dist->predict_interval(
+    m_distribution_ptr_->predict_interval(
         transformed_prediction, FLAGS_lower_confidence_interval, FLAGS_upper_confidence_interval,
         &lower_bound, &upper_bound);
     pred_interval_vec->push_back(std::make_pair(lower_bound, upper_bound));
@@ -133,8 +135,7 @@ bool Tree::boost_update_one_instance(
     unsigned long record_index,
     std::vector<double>* pred_vec) {
   if (!new_tree_node.has_left_child() && !new_tree_node.has_right_child()) {
-    (*pred_vec)[0] += new_tree_node.p1();
-    (*pred_vec)[1] += new_tree_node.p2();
+    m_distribution_ptr_->update_instance(new_tree_node, pred_vec);
     return true;
   }
   CHECK(new_tree_node.has_left_child() && new_tree_node.has_right_child());
@@ -156,15 +157,17 @@ bool Tree::boost_update(const PBTree_Node& new_tree) {
   updated_param_vec.reserve(m_matrix_ptr_->size2());
   for (unsigned long i = 0; i < m_matrix_ptr_->size2(); ++i) {
     auto param = (*m_pred_dist_vec_ptr_)[i];
-    // double p1 = std::get<0>(param);
-    // double p2 = std::get<1>(param);
-    // double p3 = std::get<2>(param);
     boost_update_one_instance(new_tree, i, &param);
     updated_param_vec.push_back(param);
   }
   m_pred_dist_vec_ptr_ =
       std::make_shared<std::vector<
           std::vector<double>>>(updated_param_vec);
+  for (unsigned int i = 0; i < 100; ++i) {
+    double m1, m2;
+    m_distribution_ptr_->param_to_moment(m_pred_dist_vec_ptr_->at(i), &m1, &m2);
+    LOG(INFO) << "The " << i << "-th target " << m_label_data_ptr_->at(i) <<  ", m1 = " << m1 << ", m2 = " << m2;
+  }
   return true;
 }
 
@@ -663,6 +666,8 @@ bool Tree::build_tree() {
   for (uint32_t i = 0; i < target_bins.size(); ++i) {
     m_pbtree_ptr_->add_target_bins(target_bins[i]);
   }
+  m_distribution_ptr_->set_target_bins(m_target_bins_ptr_);
+  m_distribution_ptr_->set_target_dist(m_target_dist_ptr_);
   // build histogram
   std::vector
       <std::vector<std::pair<double, float>>> histogram_vec;

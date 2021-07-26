@@ -56,6 +56,52 @@ bool Distribution::evaluate_rmsle(
   return true;
 }
 
+bool Distribution::pdf_to_cdf(
+    const std::vector<double>& predicted_pdf,
+    std::vector<double>* predicted_cdf) {
+  predicted_cdf->resize(predicted_pdf.size());
+  (*predicted_cdf)[0] = predicted_pdf[0];
+  for (unsigned int i = 1; i < predicted_pdf.size(); ++i) {
+    (*predicted_cdf)[i] = (*predicted_cdf)[i - 1] + predicted_pdf[i];
+  }
+  return true;
+}
+
+bool Distribution::evaluate_one_instance_cprs(
+    const double& label_data,
+    const std::vector<double>& predicted_dist,
+    double* cprs) {
+  std::vector<double> predicted_cdf;
+  pdf_to_cdf(predicted_dist, &predicted_cdf);
+  double sum = pow(predicted_cdf[0], 2);
+  for (unsigned int i = 1; i < predicted_dist.size(); ++i) {
+    if (label_data > m_target_bins_ptr_->at(i - 1)) {
+      sum += pow(predicted_cdf[i], 2);
+    } else {
+      sum += pow(predicted_cdf[i] - 1.0, 2);
+    }
+  }
+  *cprs = sum;
+  return true;
+}
+
+bool Distribution::evaluate_cprs(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::vector<double>>& predicted_dist,
+    double* cprs) {
+  double sum_cprs = 0;
+  for (unsigned long i = 0; i < record_index_vec.size(); ++i) {
+    uint64_t record_index = record_index_vec[i];
+    double tmp_cprs;
+    evaluate_one_instance_cprs(label_data[record_index], predicted_dist[record_index], &tmp_cprs);
+    sum_cprs += tmp_cprs;
+    // evaluate_one_instance_cprs(label_data[]);
+  }
+  *cprs = sum_cprs;
+  return true;
+}
+
 std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_DistributionType type) {
   std::shared_ptr<Distribution> distribution_ptr;
   switch (type)

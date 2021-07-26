@@ -129,14 +129,22 @@ bool AnalysisManager::draw_one_node(
     // Write distribution file
     std::shared_ptr<pbtree::Distribution> distribution_ptr =
         DistributionManager::get_distribution(node.distribution_type());
+    std::vector<double> target_bins_vec(m_pbtree_ptr_->target_bins().begin(), m_pbtree_ptr_->target_bins().end());
+    for (unsigned int i = 0; i < target_bins_vec.size(); ++i) {
+      LOG(INFO) << "Target_bins_vec[" << i << "] = " << target_bins_vec[i];
+    }
+    distribution_ptr->set_target_bins(std::make_shared<std::vector<double>>(target_bins_vec));
     std::string curve_str;
-    double p1 = node.p1(), p2 = node.p2(), p3 = node.p3();
-    std::vector<double> distribution = {p1, p2, p3};
+    // double p1 = node.p1(), p2 = node.p2(), p3 = node.p3();
+    
+    std::vector<double> raw_dist(m_pbtree_ptr_->init_pred().begin(), m_pbtree_ptr_->init_pred().end());
+    std::vector<double> distribution = raw_dist;
     if (FLAGS_boosting_mode) {
-      double raw_p1 = node.p1() + m_pbtree_ptr_->init_p1();
-      double raw_p2 = node.p2() + m_pbtree_ptr_->init_p2();
-      double raw_p3 = node.p3() + m_pbtree_ptr_->init_p3();
-      std::vector<double> raw_dist = {raw_p1, raw_p2, raw_p3};
+      distribution_ptr->update_instance(node, &raw_dist);
+      // double raw_p1 = node.p1() + m_pbtree_ptr_->init_p1();
+      // double raw_p2 = node.p2() + m_pbtree_ptr_->init_p2();
+      // double raw_p3 = node.p3() + m_pbtree_ptr_->init_p3();
+      // std::vector<double> raw_dist = {raw_p1, raw_p2, raw_p3};
       distribution_ptr->transform_param(raw_dist, &distribution);
     }
 //    double raw_p1 = node.p1() +

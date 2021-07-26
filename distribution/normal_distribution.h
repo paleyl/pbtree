@@ -50,6 +50,12 @@ class NormalDistribution : public Distribution {
       const std::vector<std::vector<double>>& prior,
       std::vector<double>* likelihood);
 
+  bool update_instance(const PBTree_Node& node, std::vector<double>* pred_vec) {
+    pred_vec->at(0) += node.p1();
+    pred_vec->at(1) += node.p2();
+    return true;
+  }
+
   bool set_boost_node_param(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,

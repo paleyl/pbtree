@@ -62,6 +62,8 @@ bool NormalDistribution::set_boost_node_param(
   double delta_mu = likelihood[0], delta_sigma = likelihood[1];
   node->set_p1(delta_mu);
   node->set_p2(delta_sigma);
+  node->add_target_dist(delta_mu);
+  node->add_target_dist(delta_sigma);
   node->set_distribution_type(PBTree_DistributionType_NORMAL_DISTRIBUTION);
   return true;
 }

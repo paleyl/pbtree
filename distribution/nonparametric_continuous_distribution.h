@@ -44,10 +44,12 @@ class NonparametricContinousDistribution : public Distribution {
       const std::vector<std::vector<double>>& prior,
       std::vector<double>* likelihood);
 
+  bool update_instance(const PBTree_Node& node, std::vector<double>* pred_vec);
+
   bool set_boost_node_param(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,
-      const std::vector<std::vector<double>>& likelihood,
+      const std::vector<std::vector<double>>& prior,
       PBTree_Node* node);
 
   bool transform_param(

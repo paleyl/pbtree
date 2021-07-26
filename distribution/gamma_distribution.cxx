@@ -300,6 +300,8 @@ bool GammaDistribution::set_boost_node_param(
   double delta_theta = likelihood[1];
   node->set_p1(delta_k);
   node->set_p2(delta_theta);
+  node->add_target_dist(delta_k);
+  node->add_target_dist(delta_theta);
   node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
   return true;
 }

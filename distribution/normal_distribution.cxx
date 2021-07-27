@@ -62,6 +62,7 @@ bool NormalDistribution::set_boost_node_param(
   double delta_mu = likelihood[0], delta_sigma = likelihood[1];
   node->set_p1(delta_mu);
   node->set_p2(delta_sigma);
+  node->clear_target_dist();
   node->add_target_dist(delta_mu);
   node->add_target_dist(delta_sigma);
   node->set_distribution_type(PBTree_DistributionType_NORMAL_DISTRIBUTION);
@@ -100,11 +101,11 @@ bool NormalDistribution::set_tree_node_param(
 bool NormalDistribution::plot_distribution_curve(
     const std::vector<double>& distribution,
     std::string* output_str) {
-  double p1 = distribution[0], p2 = distribution[1];
-  boost::math::normal_distribution<double> dist(p1, p2);
+  double mu = distribution[0], sigma = distribution[1];
+  boost::math::normal_distribution<double> dist(mu, sigma);
 
-  const double lower_bound = p1 - 5 * p2;
-  const double upper_bound = p1 + 5 * p2;
+  const double lower_bound = mu - 5 * sigma;
+  const double upper_bound = mu + 5 * sigma;
   const double step = (upper_bound - lower_bound) / FLAGS_distribution_sample_point_num;
   std::stringstream ss;
   for (unsigned int i = 0; i < FLAGS_distribution_sample_point_num; ++i) {
@@ -120,8 +121,10 @@ bool NormalDistribution::calculate_moment(
     const PBTree_Node& node,
     double* first_moment,
     double* second_moment) {
-  *first_moment = node.p1();
-  *second_moment = node.p2() * node.p2();
+  double mu = node.target_dist(0);
+  double sigma = node.target_dist(1);
+  *first_moment = mu;
+  *second_moment = sigma * sigma;
   return true;
 }
 

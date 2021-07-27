@@ -93,13 +93,13 @@ bool GammaDistribution::set_tree_node_param(
 bool GammaDistribution::plot_distribution_curve(
     const std::vector<double>& distribution,
     std::string* output_str) {
-  double p1 = distribution[0];
-  double p2 = distribution[1];
-  boost::math::gamma_distribution<double> dist(p1, p2);
+  double k = distribution[0];
+  double theta = distribution[1];
+  boost::math::gamma_distribution<double> dist(k, theta);
   
   const double lower_bound = 
-      p1 * p2 - 5 * sqrt(p1 * p2 * p2) > 0 ? p1 * p2 - 5 * sqrt(p1 * p2 * p2) : 0;
-  const double upper_bound = p1 * p2 + 5 * sqrt(p1 * p2 * p2);
+      k * theta - 5 * sqrt(k * theta * theta) > 0 ? k * theta - 5 * sqrt(k * theta * theta) : 0;
+  const double upper_bound = k * theta + 5 * sqrt(k * theta * theta);
   const double step = (upper_bound - lower_bound) / FLAGS_distribution_sample_point_num;
   std::stringstream ss;
   for (unsigned int i = 0; i < FLAGS_distribution_sample_point_num; ++i) {
@@ -115,8 +115,10 @@ bool GammaDistribution::calculate_moment(
     const PBTree_Node& node,
     double* first_moment,
     double* second_moment) {
-  *first_moment = node.p1() * node.p2();
-  *second_moment = node.p1() * node.p2() * node.p2();
+  double k = node.target_dist(0);
+  double theta = node.target_dist(1);
+  *first_moment = k * theta;
+  *second_moment = k * theta * theta;
   return true;
 }
 
@@ -136,11 +138,8 @@ bool GammaDistribution::param_to_moment(
  * @note   
  * @param  label_data: 
  * @param  record_index_vec: 
- * @param  std::vector<std::tuple<double: 
- * @param  predicted_param: 
- * @param  g_p1: 
- * @param  g_p2: 
- * @param  g_p3: 
+ * @param  prior: 
+ * @param  likelihood: 
  * @retval 
  */
 bool GammaDistribution::calculate_boost_gradient(
@@ -300,6 +299,7 @@ bool GammaDistribution::set_boost_node_param(
   double delta_theta = likelihood[1];
   node->set_p1(delta_k);
   node->set_p2(delta_theta);
+  node->clear_target_dist();
   node->add_target_dist(delta_k);
   node->add_target_dist(delta_theta);
   node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
@@ -310,9 +310,9 @@ bool GammaDistribution::predict_interval(
     const std::vector<double>& distribution,
     const double& lower_interval, const double& upper_interval,
     double* lower_bound, double* upper_bound) {
-  double p1 = distribution[0];
-  double p2 = distribution[1];
-  boost::math::gamma_distribution<double> dist(p1, p2);
+  double k = distribution[0];
+  double theta = distribution[1];
+  boost::math::gamma_distribution<double> dist(k, theta);
   *lower_bound = boost::math::quantile(dist, lower_interval);
   *upper_bound = boost::math::quantile(dist, upper_interval);
   return true;

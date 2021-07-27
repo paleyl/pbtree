@@ -2,6 +2,7 @@
 #include "nonparametric_continuous_distribution.h"
 
 DECLARE_double(learning_rate1);
+DEFINE_double(soft_evidence_ratio, 0.01, "");
 
 namespace pbtree {
 
@@ -203,6 +204,15 @@ bool NonparametricContinousDistribution::set_boost_node_param(
 //   return true;
 // }
 
+/**
+ * @brief  Calculate the likelihood and used as gradient
+ * @note   Use the parameter soft_evidence_ratio like learning ratio
+ * @param  label_data: input, the input labels
+ * @param  record_index_vec: record used to 
+ * @param  prior: input, prior distribution
+ * @param  likelihood: output, the likelihood distribution
+ * @retval 
+ */
 bool NonparametricContinousDistribution::calculate_boost_gradient(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
@@ -214,6 +224,11 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
     uint32_t index = 0;
     find_bin_index(*m_target_bins_ptr_, label_data[record_index_vec[i]], &index);
     (*likelihood)[index] += 1.0 / record_index_vec.size();
+  }
+  // Use sort of soft evidence
+  for (uint32_t i = 0; i < likelihood->size(); ++i) {
+    (*likelihood)[i] *= (1 - FLAGS_soft_evidence_ratio);
+    (*likelihood)[i] += FLAGS_soft_evidence_ratio / likelihood->size();
   }
   return true;
 }

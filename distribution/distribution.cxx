@@ -67,10 +67,10 @@ bool Distribution::pdf_to_cdf(
   return true;
 }
 
-bool Distribution::evaluate_one_instance_cprs(
+bool Distribution::evaluate_one_instance_crps(
     const double& label_data,
     const std::vector<double>& predicted_dist,
-    double* cprs) {
+    double* crps) {
   std::vector<double> predicted_cdf;
   pdf_to_cdf(predicted_dist, &predicted_cdf);
   double sum = pow(predicted_cdf[0], 2);
@@ -81,24 +81,24 @@ bool Distribution::evaluate_one_instance_cprs(
       sum += pow(predicted_cdf[i] - 1.0, 2);
     }
   }
-  *cprs = sum;
+  *crps = sum;
   return true;
 }
 
-bool Distribution::evaluate_cprs(
+bool Distribution::evaluate_crps(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
     const std::vector<std::vector<double>>& predicted_dist,
-    double* cprs) {
-  double sum_cprs = 0;
+    double* crps) {
+  double sum_crps = 0;
   for (unsigned long i = 0; i < record_index_vec.size(); ++i) {
     uint64_t record_index = record_index_vec[i];
-    double tmp_cprs;
-    evaluate_one_instance_cprs(label_data[record_index], predicted_dist[record_index], &tmp_cprs);
-    sum_cprs += tmp_cprs;
-    // evaluate_one_instance_cprs(label_data[]);
+    double tmp_crps;
+    evaluate_one_instance_crps(label_data[record_index], predicted_dist[record_index], &tmp_crps);
+    sum_crps += tmp_crps;
+    // evaluate_one_instance_crps(label_data[]);
   }
-  *cprs = sum_cprs;
+  *crps = sum_crps;
   return true;
 }
 

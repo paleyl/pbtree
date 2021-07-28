@@ -144,12 +144,12 @@ bool NonparametricContinousDistribution::calculate_boost_loss(
     for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
       uint64_t record_index = record_index_vec[i];
       calculate_posterior(prior[record_index], likelihood, &tmp_posterior);
-      double tmp_cprs;
-      evaluate_one_instance_cprs(label_data[record_index], tmp_posterior, &tmp_cprs);
-      *loss += tmp_cprs;
+      double tmp_crps;
+      evaluate_one_instance_crps(label_data[record_index], tmp_posterior, &tmp_crps);
+      *loss += tmp_crps;
     }
   } else {
-    evaluate_cprs(label_data, record_index_vec, prior, loss);
+    evaluate_crps(label_data, record_index_vec, prior, loss);
   }
   *loss /= record_index_vec.size();
   return true;

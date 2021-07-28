@@ -92,16 +92,16 @@ class Distribution {
       const std::vector<std::vector<double>>& predicted_dist,
       double* rmsle);
 
-  bool evaluate_cprs(
+  bool evaluate_crps(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::vector<double>>& predicted_dist,
-      double* cprs);
+      double* crps);
 
-  bool evaluate_one_instance_cprs(
+  bool evaluate_one_instance_crps(
       const double& label_data,
       const std::vector<double>& predicted_dist,
-      double* cprs);
+      double* crps);
 
   bool pdf_to_cdf(
       const std::vector<double>& predicted_pdf,

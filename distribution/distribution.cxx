@@ -73,13 +73,23 @@ bool Distribution::evaluate_one_instance_crps(
     double* crps) {
   std::vector<double> predicted_cdf;
   pdf_to_cdf(predicted_dist, &predicted_cdf);
-  double sum = pow(predicted_cdf[0], 2);
-  for (unsigned int i = 1; i < predicted_dist.size(); ++i) {
+  double sum = pow(predicted_cdf[0], 2) * (m_target_bins_ptr_->at(1) - m_target_bins_ptr_->at(0));
+  for (unsigned int i = 1; i < predicted_dist.size() - 1; ++i) {
+    double tmp_crps = 0;
     if (label_data > m_target_bins_ptr_->at(i - 1)) {
-      sum += pow(predicted_cdf[i], 2);
+      tmp_crps += pow(predicted_cdf[i], 2);
     } else {
-      sum += pow(predicted_cdf[i] - 1.0, 2);
+      tmp_crps += pow(predicted_cdf[i] - 1.0, 2);
     }
+    sum += tmp_crps * (m_target_bins_ptr_->at(i) - m_target_bins_ptr_->at(i - 1));
+  }
+  double target_bin_last_size =
+      (m_target_bins_ptr_->at(m_target_bins_ptr_->size() - 1) -
+      m_target_bins_ptr_->at(m_target_bins_ptr_->size() - 2));
+  if (label_data > m_target_bins_ptr_->back()) {
+    sum += pow(predicted_cdf[predicted_dist.size() - 1], 2) * target_bin_last_size;
+  } else {
+    sum += pow(predicted_cdf[predicted_dist.size() - 1] - 1.0, 2) * target_bin_last_size;
   }
   *crps = sum;
   return true;

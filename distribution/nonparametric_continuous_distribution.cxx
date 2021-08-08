@@ -3,6 +3,7 @@
 
 DECLARE_double(learning_rate1);
 DEFINE_double(soft_evidence_ratio, 0.01, "");
+DEFINE_double(soft_evidence_gaussian_blur_ratio, 0.5, "");
 
 namespace pbtree {
 
@@ -18,7 +19,8 @@ bool NonparametricContinousDistribution::plot_distribution_curve(
     std::string* output_str) {
   std::stringstream ss;
   for (unsigned int i = 1; i < m_target_bins_ptr_->size(); ++i) {
-    ss << (m_target_bins_ptr_->at(i) + m_target_bins_ptr_->at(i - 1)) / 2.0 << " " << distribution[i] << "\n";
+    ss << (m_target_bins_ptr_->at(i) + m_target_bins_ptr_->at(i - 1)) / 2.0
+       << " " << distribution[i] / ( (m_target_bins_ptr_->at(i) - m_target_bins_ptr_->at(i - 1)) ) << "\n";
   }
   *output_str = ss.str();
   return true;
@@ -219,17 +221,22 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
     const std::vector<std::vector<double>>& prior,
     std::vector<double>* likelihood) {
   // likelihood->resize(m_target_dist_ptr_->size());
-  *likelihood = std::vector<double>(m_target_dist_ptr_->size(), 0.0);
+  std::vector<double> tmp_likelihood = std::vector<double>(m_target_dist_ptr_->size(), 0.0);
   for (uint32_t i = 0; i < record_index_vec.size(); ++i) {
     uint32_t index = 0;
     find_bin_index(*m_target_bins_ptr_, label_data[record_index_vec[i]], &index);
-    (*likelihood)[index] += 1.0 / record_index_vec.size();
+    tmp_likelihood[index] += 1.0 / record_index_vec.size();
+  }
+  for (uint32_t i = 0; i < tmp_likelihood.size(); ++i) {
+    tmp_likelihood[i] = tmp_likelihood[i] / m_target_dist_ptr_->at(i);
   }
   // Use sort of soft evidence
-  for (uint32_t i = 0; i < likelihood->size(); ++i) {
-    (*likelihood)[i] *= (1 - FLAGS_soft_evidence_ratio);
-    (*likelihood)[i] += FLAGS_soft_evidence_ratio / likelihood->size();
-  }
+  // for (uint32_t i = 0; i < likelihood->size(); ++i) {
+  //   (*likelihood)[i] *= (1 - FLAGS_soft_evidence_ratio);
+  //   (*likelihood)[i] += FLAGS_soft_evidence_ratio / likelihood->size();
+  // }
+  uint32_t samples = m_target_dist_ptr_->size() * FLAGS_soft_evidence_gaussian_blur_ratio;
+  *likelihood = DistributionUtility::gauss_smoothen(tmp_likelihood, 1.0, samples);
   return true;
 }
 

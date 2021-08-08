@@ -2,6 +2,7 @@
 #define DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
 
 #include "distribution.h"
+#include "distribution_utility.h"
 
 namespace pbtree {
 class NonparametricContinousDistribution : public Distribution {

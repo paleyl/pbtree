@@ -164,7 +164,7 @@ bool Tree::boost_update(const PBTree_Node& new_tree) {
       std::make_shared<std::vector<
           std::vector<double>>>(updated_param_vec);
   for (unsigned int i = 0; i < 100; ++i) {
-    double m1, m2;
+    double m1 = 0, m2 = 0;
     m_distribution_ptr_->param_to_moment(m_pred_dist_vec_ptr_->at(i), &m1, &m2);
     LOG(INFO) << "The " << i << "-th target " << m_label_data_ptr_->at(i) <<  ", m1 = " << m1 << ", m2 = " << m2;
   }

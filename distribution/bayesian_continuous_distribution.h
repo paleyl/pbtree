@@ -1,12 +1,11 @@
-#ifndef DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
-#define DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
+#ifndef DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_
+#define DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_
 
 #include "distribution.h"
 #include "distribution_utility.h"
-#include "utility/utility.h"
 
 namespace pbtree {
-class NonparametricContinousDistribution : public Distribution {
+class BayesianContinuousDistribution : public Distribution {
  public:
   bool calculate_loss(
       const std::vector<double>& label_data,
@@ -78,4 +77,4 @@ class NonparametricContinousDistribution : public Distribution {
 
 }  // namespace pbtree
 
-#endif  // DISTRIBUTION_NONPARAMETRIC_CONTINUOUS_DISTRIBUTION_H_
+#endif  // DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_

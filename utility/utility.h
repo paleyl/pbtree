@@ -3,6 +3,7 @@
 #define UTILITY_UTILITY_H_
 
 #include "stdint.h"
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,8 @@ class Utility {
       std::vector<std::string> *result);
   static bool check_double_equal(const double& a, const double& b);
   static bool check_double_le(const double& a, const double& b);  // less or equal
+  static bool find_bin_index(
+      const std::vector<double>& bins, const double& target, uint32_t* index);
 };
 }  // namespace pbtree
 

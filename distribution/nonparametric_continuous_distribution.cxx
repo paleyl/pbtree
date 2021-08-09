@@ -2,8 +2,9 @@
 #include "nonparametric_continuous_distribution.h"
 
 DECLARE_double(learning_rate1);
-DEFINE_double(soft_evidence_ratio, 0.01, "");
-DEFINE_double(soft_evidence_gaussian_blur_ratio, 0.5, "");
+DEFINE_string(nonparam_devivative_mode, "crps", "");
+// DEFINE_double(soft_evidence_ratio, 0.01, "");
+// DEFINE_double(soft_evidence_gaussian_blur_ratio, 0.5, "");
 
 namespace pbtree {
 
@@ -33,36 +34,12 @@ bool NonparametricContinousDistribution::calculate_moment(
   return true;
 }
 
-bool find_bin_index(
-    const std::vector<double>& bins, const double& target, uint32_t* index) {
-  auto pos = std::upper_bound(bins.data(), bins.data() + bins.size(), target);
-  *index = pos - bins.data();
-  return true;
-}
-
-bool calculate_posterior(
-    const std::vector<double>& prior, const std::vector<double>& likelihood,
-    std::vector<double>* posterior) {
-  CHECK_EQ(prior.size(), likelihood.size());
-  posterior->resize(prior.size());
-  double sum_product = 0;
-  for (uint32_t i = 0; i < prior.size(); ++i) {
-    (*posterior)[i] = prior[i] * likelihood[i];
-    sum_product += (*posterior)[i];
-  }
-  for (uint32_t i = 0; i < prior.size(); ++i) {
-    (*posterior)[i] /= sum_product;
-  }
-  return true;
-}
-
 bool NonparametricContinousDistribution::update_instance(
     const PBTree_Node& node, std::vector<double>* pred_vec) {
   CHECK(unsigned(node.target_dist_size()) == pred_vec->size());
-  std::vector<double> likelihood(node.target_dist().begin(), node.target_dist().end());
-  std::vector<double> posterior;
-  calculate_posterior(*pred_vec, likelihood, &posterior);
-  *pred_vec = posterior;
+  for (unsigned int i = 0; i < pred_vec->size(); ++i) {
+    pred_vec->at(i) += node.target_dist(i);
+  }
   return true;
 }
 
@@ -78,14 +55,25 @@ bool NonparametricContinousDistribution::param_to_moment(
 }
 
 bool NonparametricContinousDistribution::init_param(std::vector<double>* init_dist) {
-  *init_dist = *m_target_dist_ptr_;
+  init_dist->resize(m_target_dist_ptr_->size());
+  for (unsigned int i = 0; i < m_target_dist_ptr_->size(); ++i) {
+    init_dist->at(i) = log(m_target_dist_ptr_->at(i));
+  }
   return true;
 }
 
 bool NonparametricContinousDistribution::transform_param(
     const std::vector<double>& raw_dist,
     std::vector<double>* pred_dist) {
-  *pred_dist = raw_dist;
+  pred_dist->resize(raw_dist.size());
+  double sum = 0;
+  for (unsigned int i = 0; i < raw_dist.size(); ++i) {
+    pred_dist->at(i) = exp(raw_dist[i]);
+    sum += pred_dist->at(i);
+  }
+  for (unsigned int i = 0; i < raw_dist.size(); ++i) {
+    pred_dist->at(i) /= sum;
+  }
   return true;
 }
 
@@ -96,8 +84,8 @@ bool NonparametricContinousDistribution::predict_interval(
   uint32_t lower_index, upper_index;
   std::vector<double> cdf;
   pdf_to_cdf(distribution, &cdf);
-  find_bin_index(cdf, lower_interval, &lower_index);
-  find_bin_index(cdf, upper_interval, &upper_index);
+  Utility::find_bin_index(cdf, lower_interval, &lower_index);
+  Utility::find_bin_index(cdf, upper_interval, &upper_index);
   if (lower_index == 0) lower_index = 1;
   *lower_bound = m_target_bins_ptr_->at(lower_index - 1);
   *upper_bound = m_target_bins_ptr_->at(upper_index - 1);
@@ -122,15 +110,6 @@ bool NonparametricContinousDistribution::calculate_loss(
   return true;
 }
 
-    // std::vector<double> tmp_posterior;
-    // tmp_posterior.resize(likelihood.size());
-    // for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
-    //   for (unsigned int j = 0; j < likelihood.size(); ++j) {
-    //     tmp_posterior[j] = prior[i][j] + likelihood[j];
-    //   }
-    //   posterior[i] = tmp_posterior;
-    // }
-
 bool NonparametricContinousDistribution::calculate_boost_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
@@ -143,15 +122,27 @@ bool NonparametricContinousDistribution::calculate_boost_loss(
     calculate_boost_gradient(
         label_data, record_index_vec, prior, &likelihood);
     std::vector<double> tmp_posterior;
+    tmp_posterior.resize(m_target_dist_ptr_->size());
     for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
       uint64_t record_index = record_index_vec[i];
-      calculate_posterior(prior[record_index], likelihood, &tmp_posterior);
+      for (unsigned int j = 0; j < tmp_posterior.size(); ++j) {
+        tmp_posterior[j] = prior[record_index][j] + likelihood[j];
+      }
+      std::vector<double> posterior;
+      transform_param(tmp_posterior, &posterior);
       double tmp_crps;
-      evaluate_one_instance_crps(label_data[record_index], tmp_posterior, &tmp_crps);
+      evaluate_one_instance_crps(label_data[record_index], posterior, &tmp_crps);
       *loss += tmp_crps;
     }
   } else {
-    evaluate_crps(label_data, record_index_vec, prior, loss);
+    for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
+      uint64_t record_index = record_index_vec[i];
+      double tmp_crps;
+      std::vector<double> posterior;
+      transform_param(prior[record_index], &posterior);
+      evaluate_one_instance_crps(label_data[record_index], posterior, &tmp_crps);
+      *loss += tmp_crps;
+    }
   }
   *loss /= record_index_vec.size();
   return true;
@@ -206,6 +197,16 @@ bool NonparametricContinousDistribution::set_boost_node_param(
 //   return true;
 // }
 
+double get_bin_width(const std::vector<double>& bins, uint32_t index) {
+  if (index == 0) {
+    return bins[1] - bins[0];
+  } else if (index == bins.size()) {
+    return bins[index - 1] - bins[index - 2];
+  } else {
+    return bins[index] - bins[index - 1];
+  }
+}
+
 /**
  * @brief  Calculate the likelihood and used as gradient
  * @note   Use the parameter soft_evidence_ratio like learning ratio
@@ -220,23 +221,79 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
     const std::vector<uint64_t>& record_index_vec,
     const std::vector<std::vector<double>>& prior,
     std::vector<double>* likelihood) {
-  // likelihood->resize(m_target_dist_ptr_->size());
-  std::vector<double> tmp_likelihood = std::vector<double>(m_target_dist_ptr_->size(), 0.0);
-  for (uint32_t i = 0; i < record_index_vec.size(); ++i) {
-    uint32_t index = 0;
-    find_bin_index(*m_target_bins_ptr_, label_data[record_index_vec[i]], &index);
-    tmp_likelihood[index] += 1.0 / record_index_vec.size();
+  *likelihood = std::vector<double>(m_target_dist_ptr_->size(), 0.0);
+  for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
+    uint32_t record_index = record_index_vec[i];
+    const std::vector<double>& record_data = prior[record_index];
+    std::vector<double> exp_record_data;
+    exp_record_data.resize(record_data.size());
+    double exp_record_sum = 0;
+
+    for (unsigned int j = 0; j < record_data.size(); ++j) {
+      exp_record_data[j] = exp(record_data[j]);
+      exp_record_sum += exp_record_data[j];
+    }
+    // std::stringstream ss;
+    // for (unsigned int j = 0; j < record_data.size(); ++j) {
+    //   ss << record_data[j] << ":" << exp_record_data[j] << ":" << exp_record_data[j] / exp_record_sum << ",";
+    // }
+    // LOG_EVERY_N(INFO, 100000) << "Record data " << ss.str();
+    if (FLAGS_nonparam_devivative_mode == "mle") {
+      // derivative of MLE
+      uint32_t bin_index = 0;
+      Utility::find_bin_index(*m_target_bins_ptr_, label_data[record_index], &bin_index);
+      for (unsigned int j = 0; j < record_data.size(); ++j) {
+        if (j == bin_index) {
+          likelihood->at(j) += -1 * (1 - exp_record_data[j] / exp_record_sum);
+        } else {
+          likelihood->at(j) += exp_record_data[j] / exp_record_sum;
+        }
+      }
+    } else if (FLAGS_nonparam_devivative_mode == "crps_to_y") {
+      // derivative of CRPS to y
+      double cum = 0;
+      for (unsigned int j = 0; j < record_data.size(); ++j) {
+        cum += exp_record_data[j];
+        if (j == 0 || m_target_bins_ptr_->at(j - 1) < label_data[record_index]) {
+          likelihood->at(j) += 2 * (cum / exp_record_sum) * exp_record_data[j] / exp_record_sum;
+        } else {
+          likelihood->at(j) += 2 * (cum / exp_record_sum - 1) * exp_record_data[j] / exp_record_sum;
+        }
+      }
+    } else if (FLAGS_nonparam_devivative_mode == "crps") {
+      // direct derivative of CRPS
+      double cum = 0;
+      double cube_exp_sum = pow(exp_record_sum, 3);
+      for (unsigned int j = 0; j < record_data.size(); ++j) {  // M steps for cdf
+        cum += exp_record_data[j];
+        for (unsigned int k = 0; k < record_data.size(); ++k) {  // crps derivate of M values
+          double tmp_grad = 0;
+          if (j == 0 || m_target_bins_ptr_->at(j - 1) < label_data[record_index]) {
+            if (k <= j) {
+              tmp_grad = 2 * cum * (exp_record_sum - cum) / cube_exp_sum;  // 2(X+A)(B-A) / (X+B)^3
+            } else {
+              tmp_grad = -2 * pow(cum, 2) / cube_exp_sum;  // -2 * C^2 / (X+B)^3
+            }
+          } else {
+            if (k <= j) {
+              tmp_grad = -2 * pow(exp_record_sum - cum, 2) / cube_exp_sum;  // -2(A-B)^2 / (X+B)^3 
+            } else {
+              tmp_grad = 2 * cum * (exp_record_sum - cum) / cube_exp_sum;  // 2 * C * (X+B-C) / (X+B)^3
+            }
+          }
+          tmp_grad *= exp_record_data[k];
+          // tmp_grad *= (exp_record_data[k] * get_bin_width(*m_target_bins_ptr_, k));
+          likelihood->at(k) += tmp_grad;
+        }
+      }
+    } else {
+      LOG(FATAL) << "Unkonw devivative_mode " << FLAGS_nonparam_devivative_mode;
+    }
   }
-  for (uint32_t i = 0; i < tmp_likelihood.size(); ++i) {
-    tmp_likelihood[i] = tmp_likelihood[i] / m_target_dist_ptr_->at(i);
+  for (unsigned int i = 0; i < likelihood->size(); ++i) {
+    likelihood->at(i) *= (-1 * FLAGS_learning_rate1 / record_index_vec.size());
   }
-  // Use sort of soft evidence
-  // for (uint32_t i = 0; i < likelihood->size(); ++i) {
-  //   (*likelihood)[i] *= (1 - FLAGS_soft_evidence_ratio);
-  //   (*likelihood)[i] += FLAGS_soft_evidence_ratio / likelihood->size();
-  // }
-  uint32_t samples = m_target_dist_ptr_->size() * FLAGS_soft_evidence_gaussian_blur_ratio;
-  *likelihood = DistributionUtility::gauss_smoothen(tmp_likelihood, 1.0, samples);
+
   return true;
 }
 

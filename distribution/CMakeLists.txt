@@ -9,4 +9,6 @@ INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/glog/src")
 INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/gflags/build/include")
 INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../proto/build")
 add_library(distribution distribution.cxx gamma_distribution.cxx normal_distribution.cxx 
-nonparametric_continuous_distribution.cxx distribution_utility.cxx)
+nonparametric_continuous_distribution.cxx 
+bayesian_continuous_distribution.cxx 
+distribution_utility.cxx)

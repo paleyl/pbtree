@@ -165,7 +165,9 @@ bool Tree::boost_update(const PBTree_Node& new_tree) {
           std::vector<double>>>(updated_param_vec);
   for (unsigned int i = 0; i < 100; ++i) {
     double m1 = 0, m2 = 0;
-    m_distribution_ptr_->param_to_moment(m_pred_dist_vec_ptr_->at(i), &m1, &m2);
+    std::vector<double> transformed_prediction;
+    m_distribution_ptr_->transform_param(m_pred_dist_vec_ptr_->at(i), &transformed_prediction);
+    m_distribution_ptr_->param_to_moment(transformed_prediction, &m1, &m2);
     LOG(INFO) << "The " << i << "-th target " << m_label_data_ptr_->at(i) <<  ", m1 = " << m1 << ", m2 = " << m2;
   }
   return true;

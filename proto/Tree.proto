@@ -9,6 +9,7 @@ message PBTree {
     BINOMIAL_DISTRIBUTION = 2;
     NONPARAMETRIC_CONTINUOUS = 3;
     NONPARAMETRIC_DISCRETE = 4;
+    BAYESIAN_CONTINUOUS = 5;
   }
 
   message Node {

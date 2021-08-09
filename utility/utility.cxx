@@ -52,6 +52,13 @@ bool Utility::check_double_le(const double& a, const double& b) {  // less or eq
   else
     return false;
 }
+
+bool Utility::find_bin_index(
+    const std::vector<double>& bins, const double& target, uint32_t* index) {
+  auto pos = std::upper_bound(bins.data(), bins.data() + bins.size(), target);
+  *index = pos - bins.data();
+  return true;
+}
 // bool read_data(const std::string& data_path, label_data_t* data) {
 //   FILE* fp1 = fopen(data_path.data(), "r");
 //   if (fp1 == nullptr) {

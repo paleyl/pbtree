@@ -3,6 +3,7 @@
 #include "gamma_distribution.h"
 #include "normal_distribution.h"
 #include "nonparametric_continuous_distribution.h"
+#include "bayesian_continuous_distribution.h"
 
 DEFINE_uint32(distribution_sample_point_num, 100, "");
 DEFINE_double(regularization_param1, 0.01, "");
@@ -124,6 +125,9 @@ std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_Distr
     break;
   case PBTree_DistributionType_NONPARAMETRIC_CONTINUOUS:
     distribution_ptr = std::shared_ptr<Distribution>(new NonparametricContinousDistribution());
+    break;
+  case PBTree_DistributionType_BAYESIAN_CONTINUOUS:
+    distribution_ptr = std::shared_ptr<Distribution>(new BayesianContinuousDistribution());
     break;
   default:
     LOG(FATAL) << "Unrecognized distribution type " << type;

@@ -3,6 +3,7 @@
 
 DECLARE_double(learning_rate1);
 DEFINE_string(nonparam_devivative_mode, "crps", "");
+DEFINE_double(nonparam_log_freq, 1e-9, "");
 // DEFINE_double(soft_evidence_ratio, 0.01, "");
 // DEFINE_double(soft_evidence_gaussian_blur_ratio, 0.5, "");
 
@@ -233,20 +234,21 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
       exp_record_data[j] = exp(record_data[j]);
       exp_record_sum += exp_record_data[j];
     }
+    std::vector<double> one_instance_gradient(m_target_dist_ptr_->size(), 0);
     // std::stringstream ss;
     // for (unsigned int j = 0; j < record_data.size(); ++j) {
     //   ss << record_data[j] << ":" << exp_record_data[j] << ":" << exp_record_data[j] / exp_record_sum << ",";
     // }
     // LOG_EVERY_N(INFO, 100000) << "Record data " << ss.str();
+    uint32_t bin_index = 0;
+    Utility::find_bin_index(*m_target_bins_ptr_, label_data[record_index], &bin_index);
     if (FLAGS_nonparam_devivative_mode == "mle") {
       // derivative of MLE
-      uint32_t bin_index = 0;
-      Utility::find_bin_index(*m_target_bins_ptr_, label_data[record_index], &bin_index);
       for (unsigned int j = 0; j < record_data.size(); ++j) {
         if (j == bin_index) {
-          likelihood->at(j) += -1 * (1 - exp_record_data[j] / exp_record_sum);
+          one_instance_gradient[j] += -1 * (1 - exp_record_data[j] / exp_record_sum);
         } else {
-          likelihood->at(j) += exp_record_data[j] / exp_record_sum;
+          one_instance_gradient[j] += exp_record_data[j] / exp_record_sum;
         }
       }
     } else if (FLAGS_nonparam_devivative_mode == "crps_to_y") {
@@ -255,9 +257,9 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
       for (unsigned int j = 0; j < record_data.size(); ++j) {
         cum += exp_record_data[j];
         if (j == 0 || m_target_bins_ptr_->at(j - 1) < label_data[record_index]) {
-          likelihood->at(j) += 2 * (cum / exp_record_sum) * exp_record_data[j] / exp_record_sum;
+          one_instance_gradient[j] += 2 * (cum / exp_record_sum) * exp_record_data[j] / exp_record_sum;
         } else {
-          likelihood->at(j) += 2 * (cum / exp_record_sum - 1) * exp_record_data[j] / exp_record_sum;
+          one_instance_gradient[j] += 2 * (cum / exp_record_sum - 1) * exp_record_data[j] / exp_record_sum;
         }
       }
     } else if (FLAGS_nonparam_devivative_mode == "crps") {
@@ -281,17 +283,49 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
               tmp_grad = 2 * cum * (exp_record_sum - cum) / cube_exp_sum;  // 2 * C * (X+B-C) / (X+B)^3
             }
           }
-          tmp_grad *= exp_record_data[k];
-          // tmp_grad *= (exp_record_data[k] * get_bin_width(*m_target_bins_ptr_, k));
-          likelihood->at(k) += tmp_grad;
+          // tmp_grad *= exp_record_data[k];
+          tmp_grad *= (exp_record_data[k] * get_bin_width(*m_target_bins_ptr_, k));
+          one_instance_gradient[k] += tmp_grad;
+          if (std::isnan(tmp_grad) || std::isinf(tmp_grad)) {
+            LOG(INFO) << "Nan grad " << label_data[record_index] << "j = " << j << ", k = " << k;
+          }
+          // if (k == record_data.size() - 1) {
+          //   LOG_EVERY_N(INFO, 10000) << "Tmp grad = " << tmp_grad << ", width = " << get_bin_width(*m_target_bins_ptr_, k);
+          // }
         }
       }
     } else {
       LOG(FATAL) << "Unkonw devivative_mode " << FLAGS_nonparam_devivative_mode;
     }
+    for (unsigned int j = 0; j < likelihood->size(); ++j) {
+      likelihood->at(j) += one_instance_gradient[j];
+    }
+
+    // DEBUG LOGS
+    if (rand() * 1.0 / RAND_MAX < FLAGS_nonparam_log_freq
+        || std::isnan(one_instance_gradient.back())) {
+      std::stringstream ss1, ss2;
+      for (unsigned int j = 0; j <= bin_index; ++j) {
+        ss1 << one_instance_gradient[j] << ",";
+      }
+      for (unsigned int j = bin_index + 1; j < one_instance_gradient.size(); ++j) {
+        ss2 << one_instance_gradient[j] << ",";
+      }
+      LOG(INFO) << "Label = " << label_data[record_index]
+                << ", bin_index = " << bin_index
+                << ", left gradient " << ss1.str()
+                << ", right gradient " << ss2.str();
+    }
   }
   for (unsigned int i = 0; i < likelihood->size(); ++i) {
     likelihood->at(i) *= (-1 * FLAGS_learning_rate1 / record_index_vec.size());
+  }
+  if (rand() * 1.0 / RAND_MAX < 0.001) {
+    std::stringstream ss;
+    for (unsigned int i = 0; i < likelihood->size(); ++i) {
+      ss << likelihood->at(i) << ",";
+    }
+    LOG(INFO) << "Gradient " << ss.str();
   }
 
   return true;

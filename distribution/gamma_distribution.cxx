@@ -13,24 +13,26 @@ DEFINE_uint64(gamma_alter_round, 10, "");
 
 namespace pbtree {
 
-bool GammaDistribution::init_param(double* p1, double* p2, double* p3) {
-  *p1 = FLAGS_gamma_init_p1;  // log_k
-  *p2 = FLAGS_gamma_init_p2;  // log_theta
+bool GammaDistribution::init_param(std::vector<double>* init_dist) {
+  init_dist->resize(2);
+  (*init_dist)[0] = FLAGS_gamma_init_p1;  // log_k
+  (*init_dist)[1] = FLAGS_gamma_init_p2;  // log_theta
   return true;
 }
 
 bool GammaDistribution::transform_param(
-    const double& raw_p1, const double& raw_p2, const double& raw_p3,
-    double* p1, double* p2, double* p3) {
-  *p1 = exp(raw_p1) + FLAGS_gamma_k_lower_bound;
-  *p2 = exp(raw_p2);
+      const std::vector<double>& raw_dist,
+      std::vector<double>* transformed_dist) {
+  transformed_dist->resize(2);
+  (*transformed_dist)[0] = exp(raw_dist[0]);
+  (*transformed_dist)[1] = exp(raw_dist[1]);
   return true;
 }
 
 bool GammaDistribution::calculate_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& row_index_vec,
-    double* loss, double* p1 /*= nullptr*/, double* p2 /*= nullptr*/, double* p3 /*= nullptr*/) {
+    double* loss, std::vector<double>* distribution /*= nullptr*/) {
   double mu = 0;
   // double sigma = 0;
   double square_sum = 0;
@@ -47,8 +49,11 @@ bool GammaDistribution::calculate_loss(
   // Therefore theta = variance / mean, k = mean / theta
   double theta = variance / mu;
   double k = mu / theta;
-  if (p1 != nullptr) *p1 = k;
-  if (p2 != nullptr) *p2 = theta;
+  if (distribution) {
+    distribution->resize(2);
+    (*distribution)[0] = k;
+    (*distribution)[1] = theta;
+  }
   boost::math::gamma_distribution<double> dist(k, theta);
 
   double tmp_loss = 0;
@@ -86,14 +91,15 @@ bool GammaDistribution::set_tree_node_param(
 }
 
 bool GammaDistribution::plot_distribution_curve(
-    const double& p1, const double& p2,
-    const double& p3,
+    const std::vector<double>& distribution,
     std::string* output_str) {
-  boost::math::gamma_distribution<double> dist(p1, p2);
+  double k = distribution[0];
+  double theta = distribution[1];
+  boost::math::gamma_distribution<double> dist(k, theta);
   
   const double lower_bound = 
-      p1 * p2 - 5 * sqrt(p1 * p2 * p2) > 0 ? p1 * p2 - 5 * sqrt(p1 * p2 * p2) : 0;
-  const double upper_bound = p1 * p2 + 5 * sqrt(p1 * p2 * p2);
+      k * theta - 5 * sqrt(k * theta * theta) > 0 ? k * theta - 5 * sqrt(k * theta * theta) : 0;
+  const double upper_bound = k * theta + 5 * sqrt(k * theta * theta);
   const double step = (upper_bound - lower_bound) / FLAGS_distribution_sample_point_num;
   std::stringstream ss;
   for (unsigned int i = 0; i < FLAGS_distribution_sample_point_num; ++i) {
@@ -109,16 +115,18 @@ bool GammaDistribution::calculate_moment(
     const PBTree_Node& node,
     double* first_moment,
     double* second_moment) {
-  *first_moment = node.p1() * node.p2();
-  *second_moment = node.p1() * node.p2() * node.p2();
+  double k = node.target_dist(0);
+  double theta = node.target_dist(1);
+  *first_moment = k * theta;
+  *second_moment = k * theta * theta;
   return true;
 }
 
 bool GammaDistribution::param_to_moment(
-    const std::tuple<double, double, double>& param,
+    const std::vector<double>& distribution,
     double* first_moment, double* second_moment) {
-  double k = std::get<0>(param);
-  double theta = std::get<1>(param);
+  double k = distribution[0];
+  double theta = distribution[1];
   *first_moment = k * theta;
   // if (k > 1) *first_moment = (k - 1) * theta;
   *second_moment = k * theta * theta;
@@ -130,20 +138,17 @@ bool GammaDistribution::param_to_moment(
  * @note   
  * @param  label_data: 
  * @param  record_index_vec: 
- * @param  std::vector<std::tuple<double: 
- * @param  predicted_param: 
- * @param  g_p1: 
- * @param  g_p2: 
- * @param  g_p3: 
+ * @param  prior: 
+ * @param  likelihood: 
  * @retval 
  */
 bool GammaDistribution::calculate_boost_gradient(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
-    double* g_p1, double* g_p2, double* g_p3) {
-  if (g_p1 == nullptr || g_p2 == nullptr) {
-    LOG(FATAL) << "Pointer for g_p1 or g_p2 is null";
+    const std::vector<std::vector<double>>& prior,
+    std::vector<double>* likelihood) {
+  if (likelihood == nullptr) {
+    LOG(FATAL) << "Pointer for likelihood vec is null";
     return false;
   }
   double sum_gradient_k = 0;
@@ -159,12 +164,11 @@ bool GammaDistribution::calculate_boost_gradient(
    */
 
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
-    auto param = predicted_param[*iter];
-    double log_k = std::get<0>(param);
-    double log_theta = std::get<1>(param);
-
-    double k, theta;
-    transform_param(log_k, log_theta, 0, &k, &theta, nullptr);
+    auto param = prior[*iter];
+    std::vector<double> transformed_param;
+    transform_param(param, &transformed_param);
+    double k = transformed_param[0];
+    double theta = transformed_param[1];
 
     double y = label_data[*iter];
     double gradient_log_k = 
@@ -177,8 +181,9 @@ bool GammaDistribution::calculate_boost_gradient(
   }
   double gradient_k = sum_gradient_k * FLAGS_learning_rate1;
   double gradient_theta = sum_gradient_theta * FLAGS_learning_rate2;
-  if (g_p1 != nullptr) *g_p1 = gradient_k / record_index_vec.size();
-  if (g_p2 != nullptr) *g_p2 = gradient_theta / record_index_vec.size();
+  likelihood->resize(2);
+  (*likelihood)[0] = gradient_k / record_index_vec.size();
+  (*likelihood)[1] = gradient_theta / record_index_vec.size();
   return true;
 }
 
@@ -236,13 +241,16 @@ bool _calculate_boost_gradient(
 bool GammaDistribution::calculate_boost_loss(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    const std::vector<std::vector<double>>& prior,
     double* loss,
     const bool& evaluation) {
   double tmp_loss = 0;
   double delta_k = 0, delta_theta = 0;
+  std::vector<double> likelihood;
   if (!evaluation) {
-    calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
+    calculate_boost_gradient(label_data, record_index_vec, prior, &likelihood);
+    delta_k = likelihood[0];
+    delta_theta = likelihood[1];
   }
   if (std::isnan(delta_k) || std::isnan(delta_theta)) {
     LOG(WARNING) << "Delta_k " << delta_k << " delta_theta " << delta_theta;
@@ -252,14 +260,15 @@ bool GammaDistribution::calculate_boost_loss(
   VLOG(101) << "Evaluation = " << evaluation << " Gradient delta_k = "
             << delta_k << ", gradient delta_theta = " << delta_theta;
   for (auto iter = record_index_vec.begin(); iter != record_index_vec.end(); ++iter) {
-    auto param = predicted_param[*iter];
-    double k = std::get<0>(param);
-    double theta = std::get<1>(param);
+    auto param = prior[*iter];
+    double k = param[0];
+    double theta = param[1];
     double new_k = k + delta_k;
     double new_theta = theta + delta_theta;
-    double raw_k, raw_theta;
-    transform_param(new_k, new_theta, 0, &raw_k, &raw_theta, nullptr);
-
+    std::vector<double> new_dist = {new_k, new_theta};
+    std::vector<double> raw_dist;
+    transform_param(new_dist, &raw_dist);
+    double raw_k = raw_dist[0], raw_theta = raw_dist[1];
     boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
     double prob = boost::math::pdf(dist_sample, label_data[*iter]);
     if (prob < FLAGS_min_prob) {
@@ -281,22 +290,29 @@ bool GammaDistribution::calculate_boost_loss(
 bool GammaDistribution::set_boost_node_param(
     const std::vector<double>& label_data,
     const std::vector<uint64_t>& record_index_vec,
-    const std::vector<std::tuple<double, double, double>>& predicted_param,
+    const std::vector<std::vector<double>>& prior,
     PBTree_Node* node) {
-  double delta_k = 0, delta_theta = 0;
-  calculate_boost_gradient(label_data, record_index_vec, predicted_param, &delta_k, &delta_theta, nullptr);
-
+//  double delta_k = 0, delta_theta = 0;
+  std::vector<double> likelihood;
+  calculate_boost_gradient(label_data, record_index_vec, prior, &likelihood);
+  double delta_k = likelihood[0];
+  double delta_theta = likelihood[1];
   node->set_p1(delta_k);
   node->set_p2(delta_theta);
+  node->clear_target_dist();
+  node->add_target_dist(delta_k);
+  node->add_target_dist(delta_theta);
   node->set_distribution_type(PBTree_DistributionType_GAMMA_DISTRIBUTION);
   return true;
 }
 
 bool GammaDistribution::predict_interval(
-    const double& p1, const double& p2, const double& p3,
+    const std::vector<double>& distribution,
     const double& lower_interval, const double& upper_interval,
     double* lower_bound, double* upper_bound) {
-  boost::math::gamma_distribution<double> dist(p1, p2);
+  double k = distribution[0];
+  double theta = distribution[1];
+  boost::math::gamma_distribution<double> dist(k, theta);
   *lower_bound = boost::math::quantile(dist, lower_interval);
   *upper_bound = boost::math::quantile(dist, upper_interval);
   return true;

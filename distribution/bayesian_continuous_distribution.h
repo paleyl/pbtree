@@ -1,14 +1,14 @@
-#ifndef DISTRIBUTION_NORMAL_DISTRIBUTION_H_
-#define DISTRIBUTION_NORMAL_DISTRIBUTION_H_
+#ifndef DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_
+#define DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_
 
-#include "distribution/distribution.h"
+#include "distribution.h"
+#include "distribution_utility.h"
 
 namespace pbtree {
-
-class NormalDistribution : public Distribution {
+class BayesianContinuousDistribution : public Distribution {
  public:
   bool calculate_loss(
-      const std::vector<double>& train_data,
+      const std::vector<double>& label_data,
       const std::vector<uint64_t>& row_index_vec,
       double* loss, std::vector<double>* distribution = nullptr);
 
@@ -30,12 +30,7 @@ class NormalDistribution : public Distribution {
       const std::vector<double>& distribution,
       double* first_moment, double* second_moment);
 
-  bool init_param(std::vector<double>* init_dist) {
-      init_dist->resize(2);
-      (*init_dist)[0] = 0.0;  // mu
-      (*init_dist)[1] = 1.0;  // sigma
-      return true;
-  }
+  bool init_param(std::vector<double>* init_dist);
 
   bool calculate_boost_loss(
       const std::vector<double>& label_data,
@@ -50,11 +45,7 @@ class NormalDistribution : public Distribution {
       const std::vector<std::vector<double>>& prior,
       std::vector<double>* likelihood);
 
-  bool update_instance(const PBTree_Node& node, std::vector<double>* pred_vec) {
-    pred_vec->at(0) += node.p1();
-    pred_vec->at(1) += node.p2();
-    return true;
-  }
+  bool update_instance(const PBTree_Node& node, std::vector<double>* pred_vec);
 
   bool set_boost_node_param(
       const std::vector<double>& label_data,
@@ -62,20 +53,13 @@ class NormalDistribution : public Distribution {
       const std::vector<std::vector<double>>& prior,
       PBTree_Node* node);
 
-  bool evaluate_rmse(
-      const std::vector<double>& label_data,
-      const std::vector<uint64_t>& record_index_vec,
-      const std::vector<std::tuple<double, double, double>>& predicted_param) {
-    return true;
-  }
-
   bool transform_param(
       const std::vector<double>& raw_dist,
       std::vector<double>* pred_dist);
 
   bool predict_interval(
       const std::vector<double>& distribution,
-      const double& lower_interval, const double& upper_upper_interval,
+      const double& lower_interval, const double& upper_interval,
       double* lower_bound, double* upper_bound);
 
   bool get_learning_rate(
@@ -87,10 +71,10 @@ class NormalDistribution : public Distribution {
       double* p2_learning_rate, double* p3_learning_rate);
 
   void print_version() {
-    VLOG(202) << "Normal distribution";
+    VLOG(202) << "NonparametricContinuous distribution";
   }
 };
 
 }  // namespace pbtree
 
-#endif  // DISTRIBUTION_NORMAL_DISTRIBUTION_H_
+#endif  // DISTRIBUTION_BAYESIAN_CONTINUOUS_DISTRIBUTION_H_

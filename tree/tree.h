@@ -32,21 +32,21 @@ class Tree {
   bool init();
 
   bool init_pred_dist_vec(
-      const double& p1, const double& p2, const double& p3);
+      const std::vector<double>& init_pred_vec);
 
   bool predict(
       const boost::numeric::ublas::matrix_row<
       boost::numeric::ublas::compressed_matrix<double>>& record,
-      double* p1, double* p2, double* p3);
+      std::vector<double>* pred_vec);
 
   bool predict_one_tree(
       const boost::numeric::ublas::matrix_row<
       boost::numeric::ublas::compressed_matrix<double>>& record,
-      const PBTree_Node& root, double* p1, double* p2, double* p3);
+      const PBTree_Node& root, std::vector<double>* prediction);
   
   bool boost_predict_data_set(
       const boost::numeric::ublas::compressed_matrix<double>& matrix,
-      std::vector<std::tuple<double, double, double>>* predicted_vec,
+      std::vector<std::vector<double>>* predicted_vec,
       std::vector<std::tuple<double, double>>* pred_moment_vec,
       std::vector<std::pair<double, double>>* pred_interval_vec);
 
@@ -55,7 +55,7 @@ class Tree {
   bool boost_update_one_instance(
       const PBTree_Node& new_tree,
       unsigned long record_index,
-      double* p1, double* p2, double* p3);
+      std::vector<double>* pred_vec);
 
   bool create_node(const std::vector<uint64_t>& record_index_vec,
       const uint32_t& level,
@@ -113,6 +113,18 @@ class Tree {
       const uint32_t& end_index,
       std::vector<uint64_t>* result_vec_ptr);
 
+  bool build_target_bins(
+      std::vector<double>* target_bins,
+      std::vector<double>* target_dist);
+
+  bool build_target_bins_equal_freq(
+      std::vector<double>* target_bins,
+      std::vector<double>* target_dist);
+
+  bool build_target_bins_equal_width(
+      std::vector<double>* target_bins,
+      std::vector<double>* target_dist);
+
  private:
   std::shared_ptr<PBTree> m_pbtree_ptr_;
   std::shared_ptr<boost::numeric::ublas::compressed_matrix<double>> m_matrix_ptr_;
@@ -120,12 +132,14 @@ class Tree {
   std::shared_ptr<std::vector
       <std::vector<std::pair<double, float>>>> m_histogram_vec_ptr_;  // value, percentile
   std::shared_ptr<Distribution> m_distribution_ptr_;
-  std::shared_ptr<std::vector<std::tuple<double, double, double>>> m_pred_param_vec_ptr_;
+  std::shared_ptr<std::vector<std::vector<double>>> m_pred_dist_vec_ptr_;
   std::shared_ptr<std::vector<uint64_t>> m_valid_split_feature_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::vector<std::pair<double, float>>>>> m_valid_histogram_vec_ptr_;
   std::shared_ptr<std::vector<std::pair<uint64_t, std::pair<double, double>>>> m_candidate_split_vec_ptr_;
   std::shared_ptr<std::map<uint64_t, std::vector<uint64_t>>> m_non_zero_value_map_ptr_;
   uint64_t m_max_non_zero_per_feature_;
+  std::shared_ptr<std::vector<double>> m_target_bins_ptr_;
+  std::shared_ptr<std::vector<double>> m_target_dist_ptr_;
   // std::shared_ptr<std::unordered_set<uint64_t>> m_candidate_feature_set_ptr_;
 };
 }  // namespace pbtree

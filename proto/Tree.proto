@@ -7,6 +7,9 @@ message PBTree {
     NORMAL_DISTRIBUTION = 0;
     GAMMA_DISTRIBUTION = 1;
     BINOMIAL_DISTRIBUTION = 2;
+    NONPARAMETRIC_CONTINUOUS = 3;
+    NONPARAMETRIC_DISCRETE = 4;
+    BAYESIAN_CONTINUOUS = 5;
   }
 
   message Node {
@@ -20,9 +23,12 @@ message PBTree {
     optional double loss = 8;
     optional Node left_child = 9;
     optional Node right_child = 10;
+    repeated double target_dist = 11;  // For discrete distribution
   }
   repeated Node tree = 1;
   optional double init_p1 = 2;
   optional double init_p2 = 3;
   optional double init_p3 = 4;
+  repeated double target_bins = 5;
+  repeated double init_pred = 6;
 }

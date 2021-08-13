@@ -96,7 +96,7 @@ bool run_boost_predict() {
   pbtree::Tree tree;
   tree.set_matrix_ptr(feature_matrix_ptr);
   tree.set_pbtree(pbtree_ptr);
-  std::vector<std::tuple<double, double, double>> pred_param_vec;
+  std::vector<std::vector<double>> pred_param_vec;
   std::vector<std::tuple<double, double>> pred_moment_vec;
   std::vector<std::pair<double, double>> pred_interval_vec;
   tree.boost_predict_data_set(*feature_matrix_ptr, &pred_param_vec, &pred_moment_vec, &pred_interval_vec);
@@ -119,17 +119,16 @@ bool run_boost_predict() {
               << "), (" 
               << std::get<0>(pred_moment_vec[i]) << ","
               << std::get<1>(pred_moment_vec[i]) << "), ("
-              << std::get<0>(pred_param_vec[i]) << ","
-              << std::get<1>(pred_param_vec[i]) << ")";
+              << pred_param_vec[i][0] << ","
+              << pred_param_vec[i][1] << ")";
     output_result_file << label_data_vec[i]
                        << "\t" << pred_interval_vec[i].first
                        << "\t" << pred_interval_vec[i].second
                        << "\t" << std::get<0>(pred_moment_vec[i])
                        << "\t" << std::get<1>(pred_moment_vec[i])
-                       << "\t" << std::get<0>(pred_param_vec[i])
-                       << "\t" << std::get<1>(pred_param_vec[i])
+                       << "\t" << pred_param_vec[i][0]
+                       << "\t" << pred_param_vec[i][1]
                        << "\n";
-    ;
   }
   output_result_file.close();
   LOG(INFO) << "Total sample = " << pred_param_vec.size()
@@ -174,9 +173,9 @@ bool run_test() {
     boost::numeric::ublas::matrix_row<
         boost::numeric::ublas::compressed_matrix<double>> record =
             boost::numeric::ublas::row(*feature_matrix_ptr, row_index);
-    double p1, p2, p3;
-    tree.predict(record, &p1, &p2, &p3);
-    VLOG(101) << row_index << " " << p1 << " " << p2 << " " << p3;
+    std::vector<double> pred_dist;
+    tree.predict(record, &pred_dist);
+    VLOG(101) << row_index << " " << pred_dist[0] << " " << pred_dist[1];
   }
 
   return true;

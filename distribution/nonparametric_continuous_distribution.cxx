@@ -287,7 +287,7 @@ bool NonparametricContinousDistribution::calculate_boost_gradient(
           tmp_grad *= (exp_record_data[k] * get_bin_width(*m_target_bins_ptr_, k));
           one_instance_gradient[k] += tmp_grad;
           if (std::isnan(tmp_grad) || std::isinf(tmp_grad)) {
-            LOG(INFO) << "Nan grad " << label_data[record_index] << "j = " << j << ", k = " << k;
+            LOG_EVERY_N(INFO, 1000000) << "Nan grad " << label_data[record_index] << " j = " << j << ", k = " << k;
           }
           // if (k == record_data.size() - 1) {
           //   LOG_EVERY_N(INFO, 10000) << "Tmp grad = " << tmp_grad << ", width = " << get_bin_width(*m_target_bins_ptr_, k);

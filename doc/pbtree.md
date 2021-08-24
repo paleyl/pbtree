@@ -1,17 +1,34 @@
 
 
 <div align='center' ><font size='70'>Probabilistic Boosting Tree</font></div>
+
 # 背景
 
 在真实的机器学习问题中，我们有时不仅要预估目标的均值，还要对目标取值的置信区间进行预估。特别是样本量比较少的场景下，比如广告营销的成本管理、金融产品的定价等，行为频率低，样本获取的成本高昂，单次行为背后往往都有大额的资金成本。这类相对低频的问题往往需要较深的人工干预，预估其目标变量的分布将为商业决策行为提供更充分的参考和依据。
 
-目前我们调研到的一些分布预估方案中，主要方法的优缺点列举如下：
+特别的，对于我们的广告粒度的成本预估场景，广告的成本分布受到各种因素的影响，这些因素不仅影响成本分布的均值（一阶矩 mean），还影响分布的方差（二阶矩 variance），偏度（三阶矩 skewness），峰度（四阶矩 kurtosis）。为了能够准确的预估成本的置信区间，我们先要预估成本的分布。
 
-| 方法分类|举例|优点|缺点|
-|-|-|-|-|
-|参数化方法|LSS类（GamLSS/GamboostLSS）方法[[1]](https://cran.r-project.org/web/packages/gamlss/index.html)。LSS代表location/shape/skewness。|原理简单，有现成R语言实现|以gamlss为例，它是在广义线性模型上的扩展，缺少对交叉特征的处理能力，不适用于大数据和高维稀疏特征场景。|
-|非参数化方法|Gaussian Process Regression[[2]](https://scikit-learn.org/stable/modules/gaussian_process.html) /  Distributional learning [[3]](https://arxiv.org/pdf/1707.06887.pdf)|不要求目标变量符合某种分布|计算量大，求解时间长，不适用于大数据和高维度稀疏特征场景。|
-|其他方法|Quantile Regression|实现较为简单|需要对于每个quantile训练一个模型，不够灵活，且无法保序。|
+在我们遇到的广告粒度的成本预估场景中，我们能够满足以下需求的一款开箱即用概率预估工具：
+
+- 预估精度：预估精度高，支持连续特征、离散特征、特征交叉，点估计精度至少不低于Xgboost。
+- 求解复杂度：在有限时间内能完成广告场景下工业级数据规模的模型求解。
+- 线上服务：能够集成到线上的C++编写的线上服务，且能够满足10ms的返回。
+
+目前我们调研到的一些比较有代表性的分布预估方案中，其优缺点列举如下：
+
+| 模型名称|简介|现有实现方式|精度满足业务需求|求解复杂度|支持线上服务|
+|-|-|-|-|-|-|
+|Gaussian Process Regression [NIPS 1995]|用于时间序列等序列数据场景的概率预估，求解计算量大。|Python/R|x|x|x|
+|GAMLSS [JSS 2007]|使用广义加法模型分别预估均值、方差、偏度、尖度，本质上仍然是线性模型，精度较差|Python/R|x|$\checkmark$|x|
+|BART[AOAS 2010]|Bayesian Additive Regression Tree，属于非参数模型，使用采样技术进行概率预估，计算量大|Python/R|$\checkmark$|x|x|
+|XGBOOST [2016 KDD] + Quantile Regression|Quantile Regression思路，每个分位训练一个模型，灵活性较差|C++|x|$\checkmark$|$\checkmark$|
+|NGBOOST [ICML 2020]|用分布的自然梯度（Natural Gradient）代替参数梯度，在实现上需要频繁的对参数的信息矩阵(FIM)求逆。|基于Sk-learn|$\checkmark$|x|x|
+|PGBM[SIGKDD 2021]|用gradient boosting的方式预估分布的一阶矩和二阶矩，（一阶矩和二阶矩不能完全确定一个分布）|基于PyTorch|x|$\checkmark$|x|
+
+经过调研，有几点结论：
+
+- 概率预估问题，近年来越来越受到机器学习和数据挖掘领域的关注，十年前的一些经典工具和论文，主要发表在统计学刊物上，而近两年比较有代表性的NGBOOST和PGBM开始出现在ICML和KDD这样的机器学习顶会上。
+- 目前对于概率预估，仍然是学术界的探讨较多，目前暂时没有适合工业界是用的开箱即用的工具包。
 
 对于我们要解决的生产场景下的成本、曝光、转化分布问题，目前暂无案例可供借鉴，也无成熟的框架可供使用，因此我们提出了Probabilistic Boosting Tree的框架。
 
@@ -79,6 +96,10 @@ $$\Delta k_{m,l}=\eta_1 \frac{\partial L_m}{\partial k_{m-1,l}}$$
 
 
 $$\Delta \theta_{m,l}=\eta_2 \frac{\partial L_m}{\partial \theta_{m-1,l}}$$
+
+# 效果
+
+
 
 # 附录
 寻找分裂点的伪代码如下： 

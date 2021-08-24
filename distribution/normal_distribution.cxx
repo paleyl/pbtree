@@ -7,8 +7,17 @@ DECLARE_double(learning_rate1);
 DECLARE_double(learning_rate2);
 DECLARE_uint32(distribution_sample_point_num);
 DEFINE_uint64(gauss_alter_round, 10, "");
+DEFINE_double(gauss_init_mu, 0.0, "");
+DEFINE_double(gauss_init_log_sigma, 1.0, "");
 
 namespace pbtree {
+
+bool NormalDistribution::init_param(std::vector<double>* init_dist) {
+    init_dist->resize(2);
+    (*init_dist)[0] = FLAGS_gauss_init_mu;  // mu
+    (*init_dist)[1] = FLAGS_gauss_init_log_sigma;  // sigma
+    return true;
+}
 
 bool NormalDistribution::transform_param(
     const std::vector<double>& raw_dist,

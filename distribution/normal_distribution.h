@@ -30,12 +30,7 @@ class NormalDistribution : public Distribution {
       const std::vector<double>& distribution,
       double* first_moment, double* second_moment);
 
-  bool init_param(std::vector<double>* init_dist) {
-      init_dist->resize(2);
-      (*init_dist)[0] = 0.0;  // mu
-      (*init_dist)[1] = 1.0;  // sigma
-      return true;
-  }
+  bool init_param(std::vector<double>* init_dist);
 
   bool calculate_boost_loss(
       const std::vector<double>& label_data,

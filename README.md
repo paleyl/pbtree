@@ -13,12 +13,13 @@ This project provides a framework for distribution prediction by Probability Boo
 - 支持工业界的应用：支持多线程训练、预估，支持在线服务。
 - 支持特征交叉。
 - 具有较好的解释性。
-  
-PBTree的单颗树的示意图如下：
+
+我们通过两个图形给出PBTree的直观解释。
+
+1. PBTree的单颗树的示意图如下：
 ![pbtree](./image/pbtree3_1.mdl.png)
 
-PBTree对分布的拟合过程例子如下：
-
+2. PBTree对分布的拟合过程例子如下图所示：
 <img src="./image/alter_coord.gif" width = "600" height = "400" alt="PBTree拟合过程" align=center />
 
 

@@ -66,7 +66,7 @@ cd bin
 ```
 
 ## 原理介绍
-原理请参见 [文档](doc/pbtree.md)。
+原理请参见 [文档](doc/pbtree_km.pdf)。
 
 ## 添加功能
 最常见的需求应该是添加对新的参数分布的支持，可以参考distribution/gamma_distribution.h中的GammaDistribution类，开发成您需要的分布。

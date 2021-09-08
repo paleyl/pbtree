@@ -15,6 +15,7 @@ DEFINE_double(min_value, 1e-100, "");
 DEFINE_double(max_value, 1e+100, "");
 DEFINE_double(confidence_lower_bound, 0.15, "");
 DEFINE_double(confidence_upper_bound, 0.85, "");
+DEFINE_double(crps_evaluate_bins, 10, "");
 // DEFINE_int32(input_data_line_width, 4096, "");
 
 namespace pbtree {

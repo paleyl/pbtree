@@ -86,13 +86,13 @@ class Distribution {
 //       const std::vector<uint64_t>& record_index_vec,
 //       const std::vector<std::tuple<double, double, double>>& predicted_param) = 0;
 
-  bool evaluate_rmsle(
+  virtual bool evaluate_rmsle(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::vector<double>>& predicted_dist,
       double* rmsle);
 
-  bool evaluate_crps(
+  virtual bool evaluate_crps(
       const std::vector<double>& label_data,
       const std::vector<uint64_t>& record_index_vec,
       const std::vector<std::vector<double>>& predicted_dist,

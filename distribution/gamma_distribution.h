@@ -73,6 +73,17 @@ class GammaDistribution : public Distribution {
       double* p1_learning_rate,
       double* p2_learning_rate, double* p3_learning_rate);
 
+  bool evaluate_crps(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::vector<double>>& predicted_dist,
+      double* crps);
+
+  bool evaluate_one_instance_crps(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* crps);
+
   void print_version() {
     VLOG(202) << "Gamma distribution";
   }

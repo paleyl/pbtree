@@ -103,6 +103,28 @@ class Distribution {
       const std::vector<double>& predicted_dist,
       double* crps);
 
+  virtual bool evaluate_logp(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::vector<double>>& predicted_dist,
+      double* logp);
+
+  virtual bool evaluate_one_instance_logp(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* logp);
+
+  bool evaluate_loss(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::vector<double>>& predicted_dist,
+      double* loss);
+
+  bool evaluate_one_instance_loss(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* loss);
+
   bool pdf_to_cdf(
       const std::vector<double>& predicted_pdf,
       std::vector<double>* predicted_cdf);
@@ -131,6 +153,11 @@ class Distribution {
   void set_target_dist(std::shared_ptr<std::vector<double>> target_dist) {
     m_target_dist_ptr_ = target_dist;
   }
+
+  enum LossType {
+    LOGP = 1,
+    CRPS = 2
+  };
 
  protected:
   std::shared_ptr<std::vector<double>> m_target_bins_ptr_;

@@ -84,6 +84,17 @@ class GammaDistribution : public Distribution {
       const std::vector<double>& predicted_dist,
       double* crps);
 
+  bool evaluate_logp(
+      const std::vector<double>& label_data,
+      const std::vector<uint64_t>& record_index_vec,
+      const std::vector<std::vector<double>>& predicted_dist,
+      double* logp);
+
+  bool evaluate_one_instance_logp(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* logp);
+
   void print_version() {
     VLOG(202) << "Gamma distribution";
   }

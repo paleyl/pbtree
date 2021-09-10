@@ -1,6 +1,7 @@
 #include "gamma_distribution.h"
 
 DECLARE_double(min_prob);
+DECLARE_double(min_log_prob);
 DECLARE_double(regularization_param1);
 DECLARE_double(regularization_param2);
 DECLARE_double(learning_rate1);
@@ -269,20 +270,22 @@ bool GammaDistribution::calculate_boost_loss(
     std::vector<double> new_dist = {new_k, new_theta};
     std::vector<double> raw_dist;
     transform_param(new_dist, &raw_dist);
-    double raw_k = raw_dist[0], raw_theta = raw_dist[1];
-    boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
-    double prob = boost::math::pdf(dist_sample, label_data[*iter]);
-    if (prob < FLAGS_min_prob) {
-      prob = FLAGS_min_prob;
-    }
-    double log_loss = log(prob)
-        - FLAGS_regularization_param1 * pow(log(raw_k / FLAGS_regularization_param2), 2);
-    if (std::isinf(prob) || std::isinf(log_loss)) {
-      LOG(WARNING) << "Raw_k = " << raw_k << ", raw_theta = " << raw_theta
-                   << ", label = " << label_data[*iter]
-                   << ", prob = " << prob << ", log_loss = " << log_loss;
-    }
-    tmp_loss += log_loss;
+    double one_instance_loss = 0;
+    evaluate_one_instance_loss(label_data[*iter], raw_dist, &one_instance_loss);
+    // double raw_k = raw_dist[0], raw_theta = raw_dist[1];
+    // boost::math::gamma_distribution<double> dist_sample(raw_k, raw_theta);
+    // double prob = boost::math::pdf(dist_sample, label_data[*iter]);
+    // if (prob < FLAGS_min_prob) {
+    //   prob = FLAGS_min_prob;
+    // }
+    // double log_loss = log(prob)
+    //     - FLAGS_regularization_param1 * pow(log(raw_k / FLAGS_regularization_param2), 2);
+    // if (std::isinf(prob) || std::isinf(log_loss)) {
+    //   LOG(WARNING) << "Raw_k = " << raw_k << ", raw_theta = " << raw_theta
+    //                << ", label = " << label_data[*iter]
+    //                << ", prob = " << prob << ", log_loss = " << log_loss;
+    // }
+    tmp_loss += one_instance_loss;
   }
   *loss = tmp_loss * -1 / record_index_vec.size();
   return true;
@@ -388,6 +391,43 @@ bool GammaDistribution::evaluate_one_instance_crps(
     pre_x = x;
   }
   return true;      
+}
+
+bool GammaDistribution::evaluate_logp(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::vector<double>>& predicted_dist,
+    double* logp) {
+  *logp = 0;
+  for (unsigned int i = 0; i < record_index_vec.size(); ++i) {
+    uint64_t record_index = record_index_vec[i];
+    std::vector<double> transformed_dist;
+    transform_param(predicted_dist[record_index],
+      &transformed_dist);
+    double one_instance_logp;
+    evaluate_one_instance_logp(
+        label_data[record_index], predicted_dist[record_index], &one_instance_logp);
+    *logp += one_instance_logp;
+  }
+  *logp /= record_index_vec.size();
+  return true;
+}
+
+bool GammaDistribution::evaluate_one_instance_logp(
+    const double& label_data,
+    const std::vector<double>& predicted_dist,
+    double* logp) {
+  double k = predicted_dist[0];
+  double theta = predicted_dist[1];
+  boost::math::gamma_distribution<double> dist(k, theta);
+  double prob = boost::math::pdf(dist, label_data);
+  double log_prob = log(prob);
+  if (prob < FLAGS_min_prob) {
+    log_prob = FLAGS_min_log_prob;
+  }
+  *logp = log_prob - FLAGS_regularization_param1 * pow(log(k / FLAGS_regularization_param2), 2);
+  LOG_EVERY_N(INFO, 100000) << "Evaluating gamma logp, label = " << label_data << ", logp = " << *logp;
+  return true;
 }
 
 }  // namespace pbtree

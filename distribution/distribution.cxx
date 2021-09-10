@@ -11,10 +11,13 @@ DEFINE_double(regularization_param2, 0.01, "");
 DEFINE_double(learning_rate1, 0.1, "");
 DEFINE_double(learning_rate2, 0.1, "");
 DEFINE_double(min_prob, 1e-100, "");
+DEFINE_double(min_log_prob, -10000, "");
 DEFINE_double(min_value, 1e-100, "");
 DEFINE_double(max_value, 1e+100, "");
 DEFINE_double(confidence_lower_bound, 0.15, "");
 DEFINE_double(confidence_upper_bound, 0.85, "");
+DEFINE_double(crps_evaluate_bins, 10, "");
+DEFINE_uint32(loss_type, pbtree::Distribution::LOGP, "");
 // DEFINE_int32(input_data_line_width, 4096, "");
 
 namespace pbtree {
@@ -113,25 +116,79 @@ bool Distribution::evaluate_crps(
   return true;
 }
 
+bool Distribution::evaluate_logp(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::vector<double>>& predicted_dist,
+    double* logp) {
+  return true;
+}
+
+bool Distribution::evaluate_one_instance_logp(
+    const double& label_data,
+    const std::vector<double>& predicted_dist,
+    double* logp) {
+  return true;
+}
+
+bool Distribution::evaluate_loss(
+    const std::vector<double>& label_data,
+    const std::vector<uint64_t>& record_index_vec,
+    const std::vector<std::vector<double>>& predicted_dist,
+    double* loss) {
+  switch (FLAGS_loss_type)
+  {
+    case LOGP:
+      evaluate_logp(label_data, record_index_vec, predicted_dist, loss);
+      break;
+    case CRPS:
+      evaluate_crps(label_data, record_index_vec, predicted_dist, loss);
+      break;
+    default:
+      LOG(FATAL) << "Unrecognized loss type " << FLAGS_loss_type;
+      break;
+  }
+  return true;
+}
+
+bool Distribution::evaluate_one_instance_loss(
+      const double& label_data,
+      const std::vector<double>& predicted_dist,
+      double* loss) {
+  switch (FLAGS_loss_type)
+  {
+    case LOGP:
+      evaluate_one_instance_logp(label_data, predicted_dist, loss);
+      break;
+    case CRPS:
+      evaluate_one_instance_crps(label_data, predicted_dist, loss);
+      break;
+    default:
+      LOG(FATAL) << "Unrecognized loss type " << FLAGS_loss_type;
+      break;
+  }
+  return true;
+}
+
 std::shared_ptr<Distribution> DistributionManager::get_distribution(PBTree_DistributionType type) {
   std::shared_ptr<Distribution> distribution_ptr;
   switch (type)
   {
-  case PBTree_DistributionType_NORMAL_DISTRIBUTION:
-    distribution_ptr = std::shared_ptr<Distribution>(new NormalDistribution());
-    break;
-  case PBTree_DistributionType_GAMMA_DISTRIBUTION:
-    distribution_ptr = std::shared_ptr<Distribution>(new GammaDistribution());
-    break;
-  case PBTree_DistributionType_NONPARAMETRIC_CONTINUOUS:
-    distribution_ptr = std::shared_ptr<Distribution>(new NonparametricContinousDistribution());
-    break;
-  case PBTree_DistributionType_BAYESIAN_CONTINUOUS:
-    distribution_ptr = std::shared_ptr<Distribution>(new BayesianContinuousDistribution());
-    break;
-  default:
-    LOG(FATAL) << "Unrecognized distribution type " << type;
-    break;
+    case PBTree_DistributionType_NORMAL_DISTRIBUTION:
+      distribution_ptr = std::shared_ptr<Distribution>(new NormalDistribution());
+      break;
+    case PBTree_DistributionType_GAMMA_DISTRIBUTION:
+      distribution_ptr = std::shared_ptr<Distribution>(new GammaDistribution());
+      break;
+    case PBTree_DistributionType_NONPARAMETRIC_CONTINUOUS:
+      distribution_ptr = std::shared_ptr<Distribution>(new NonparametricContinousDistribution());
+      break;
+    case PBTree_DistributionType_BAYESIAN_CONTINUOUS:
+      distribution_ptr = std::shared_ptr<Distribution>(new BayesianContinuousDistribution());
+      break;
+    default:
+      LOG(FATAL) << "Unrecognized distribution type " << type;
+      break;
   }
   return distribution_ptr;
 }

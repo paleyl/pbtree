@@ -812,7 +812,12 @@ bool Tree::build_tree() {
       double rmsle = 0;
       m_distribution_ptr_->evaluate_rmsle(
           *m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, &rmsle);
-      LOG(INFO) << "Finished training the " << i << "-th round, loss = " << loss << ", rmsle = " << rmsle;
+      double crps = 0;
+      m_distribution_ptr_->evaluate_crps(
+          *m_label_data_ptr_, record_index_vec, *m_pred_dist_vec_ptr_, &crps);
+      LOG(INFO) << "Finished training the " << i << "-th round, loss = "
+                << loss << ", rmsle = " << rmsle
+                << ", crps = " << crps;
     }
   }
   return true;

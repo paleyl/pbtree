@@ -419,14 +419,16 @@ bool GammaDistribution::evaluate_one_instance_logp(
     double* logp) {
   double k = predicted_dist[0];
   double theta = predicted_dist[1];
-  boost::math::gamma_distribution<double> dist(k, theta);
-  double prob = boost::math::pdf(dist, label_data);
-  double log_prob = log(prob);
-  if (prob < FLAGS_min_prob) {
-    log_prob = FLAGS_min_log_prob;
-  }
+  // Calculate gamma logp from pdf
+  double log_prob = - log(boost::math::tgamma(k)) - k * log(theta) + (k - 1) * log(label_data) - label_data / theta;
+  // boost::math::gamma_distribution<double> dist(k, theta);
+  // double prob = boost::math::pdf(dist, label_data);
+  // double log_prob = log(prob);
+  // if (prob < FLAGS_min_prob) {
+  //   log_prob = FLAGS_min_log_prob;
+  // }
   *logp = log_prob - FLAGS_regularization_param1 * pow(log(k / FLAGS_regularization_param2), 2);
-  LOG_EVERY_N(INFO, 100000) << "Evaluating gamma logp, label = " << label_data << ", logp = " << *logp;
+  // LOG_EVERY_N(INFO, 100000) << "Evaluating gamma logp, label = " << label_data << ", logp = " << *logp;
   return true;
 }
 

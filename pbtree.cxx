@@ -111,7 +111,7 @@ bool run_boost_predict() {
         pred_interval_vec[i].second > label_data_vec[i])
       ++hit_count;
     double tmp_relative_iterval_width =
-        (pred_interval_vec[i].second - pred_interval_vec[i].first) / std::get<0>(pred_moment_vec[i]);
+        (pred_interval_vec[i].second - pred_interval_vec[i].first) / pred_interval_vec[i].first;
     relative_interval_width += tmp_relative_iterval_width;
     LOG(INFO) << i << "-th instance: " << label_data_vec[i]
               << " [" << pred_interval_vec[i].first

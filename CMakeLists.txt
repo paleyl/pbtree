@@ -19,7 +19,7 @@ list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/glog/build")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/glog/src")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/protobuf/src/")
 #add_subdirectory(proto)
-list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/proto/build")
+#list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/build/proto")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/boost_1_75_0/")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/thirdparty/gperftools/src")
 
@@ -34,7 +34,9 @@ list(APPEND EXTRA_LIBS io)
 add_subdirectory(utility)
 list(APPEND EXTRA_LIBS utility)
 ## It seemed appeded later will be linked first, pb is depended by others so should be in the latest
-list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/proto/build/libtree_proto.a")
+add_subdirectory(proto)
+list(APPEND EXTRA_LIBS tree_proto)
+#list(APPEND EXTRA_LIBS "${PROJECT_SOURCE_DIR}/proto/build/libtree_proto.a")
 
 add_executable(pbtree pbtree.cxx)
 
@@ -44,7 +46,7 @@ target_link_libraries(pbtree PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/prot
 
 target_include_directories(pbtree PUBLIC
                            "${PROJECT_BINARY_DIR}"
-                           "${PROJECT_SOURCE_DIR}/proto/build"
+                           "${PROJECT_SOURCE_DIR}/build/proto"
                            ${CMAKE_CURRENT_SOURCE_DIR}
                            ${EXTRA_INCLUDES}
                            ${PROTOBUF_LIBRARY}

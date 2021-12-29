@@ -22,7 +22,7 @@
 #include "distribution/distribution.h"
 #include "io/data_manager.h"
 #include "io/model_manager.h"
-#include "proto/build/Tree.pb.h"
+#include "Tree.pb.h"
 #include "tree/tree.h"
 #include "utility/utility.h"
 
